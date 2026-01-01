@@ -245,6 +245,7 @@ codesign --force --sign - bmxtranswrap mxf2raw lib/*.dylib
    - Option B: Xcode build phase that downloads if missing
    - Option C: Git LFS for large file storage
 7. ~~**Multi-job queueing**: Queue multiple conversion tasks and execute sequentially~~ ✓ Done
+8. ~~**Output verification**: Verify converted files decode correctly~~ ✓ Done
 
 ---
 
@@ -565,3 +566,95 @@ func addJob(_ job: ConversionJob, autoStart: Bool = false)
 - `ConversionViewModel.swift` - `addToQueue(autoStart:)` parameter
 - `ContentView.swift` - Context-aware primary action button
 - `Views/QueueListView.swift` - Added "Start" button in queue controls
+
+---
+
+## Session Log: 2026-01-01 (Video Verification)
+
+### Overview
+Added output file verification to ensure converted MXF/MOV files are correctly playable. Uses FFmpeg to perform container validation and full decode tests.
+
+### Verification Modes
+
+#### Quick Mode (~5 seconds)
+- Container structure check using ffprobe
+- Decode first 5 seconds
+- Decode last 5 seconds
+- Fast sanity check for most common issues
+
+#### Full Mode (faster than realtime)
+- Complete frame-by-frame decode test
+- Uses VideoToolbox hardware acceleration when available
+- Verifies frame count matches expected
+- Catches bitstream errors, truncation, corruption
+
+### New Data Structures
+
+#### VerificationStatus Enum (P2Clip.swift)
+```swift
+enum VerificationStatus: Equatable, Codable {
+    case unverified       // Not yet verified
+    case verifying        // Currently running verification
+    case verified         // Passed verification
+    case failed(String)   // Failed with error message
+}
+```
+
+#### VerificationResult Struct (P2Clip.swift)
+```swift
+struct VerificationResult: Codable {
+    let fileURL: URL
+    let passed: Bool
+    let mode: VerificationMode
+    let duration: TimeInterval
+    let framesDecoded: Int?
+    let totalFrames: Int?
+    let decodingSpeed: String?     // e.g., "45.2x"
+    let containerValid: Bool
+    let errorMessage: String?
+    let verifiedAt: Date
+}
+```
+
+### VerificationService (Services/VerificationService.swift)
+Standalone service for file verification:
+- **Container Validation**: Uses ffprobe to check MXF/MOV structure
+- **Decode Testing**: FFmpeg decode to null output (`-f null -`)
+- **Hardware Acceleration**: VideoToolbox for faster decode
+- **Progress Reporting**: Frame-by-frame progress with speed metrics
+- **Cancellation Support**: Can stop verification mid-process
+
+### QueueManager Integration
+Added verification methods:
+```swift
+func verifyJob(_ jobId: UUID, mode: VerificationMode)
+func verifyAllCompleted(mode: VerificationMode)
+func cancelVerification()
+```
+
+### UI Features (QueueListView.swift)
+
+#### Per-Job Verification
+- Completed jobs show verify button (seal icon)
+- Menu with Quick/Full options
+- Progress bar during verification
+- Status icons: ✓ Verified (green seal), ✗ Failed (red seal)
+- Tooltip shows verification summary
+
+#### Batch Verification
+- "Verify All" button in queue controls
+- Processes all unverified completed jobs
+- Shows count badge
+
+#### Status Indicators
+- Orange highlight during verification
+- Header shows "Verifying..." when active
+- "Stop Verify" button to cancel
+
+### Files Created
+- `Services/VerificationService.swift` - Verification engine
+
+### Files Modified
+- `Models/P2Clip.swift` - Added `VerificationStatus`, `VerificationResult`, `VerificationMode`
+- `Services/QueueManager.swift` - Verification integration, `isVerifying` state
+- `Views/QueueListView.swift` - Verification UI controls and status display

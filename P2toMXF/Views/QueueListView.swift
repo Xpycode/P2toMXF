@@ -73,6 +73,15 @@ struct QueueListView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+            } else if queueManager.isVerifying {
+                HStack(spacing: 4) {
+                    ProgressView()
+                        .scaleEffect(0.5)
+                        .frame(width: 16, height: 16)
+                    Text("Verifying...")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
             } else if !queueManager.jobs.isEmpty {
                 Text("\(queueManager.completedCount)/\(queueManager.jobs.count) done")
                     .font(.caption)
@@ -140,6 +149,35 @@ struct QueueListView: View {
             }
 
             Spacer()
+
+            // Verify All button (when there are unverified completed jobs)
+            if queueManager.unverifiedCompletedCount > 0 && !queueManager.isVerifying {
+                Menu {
+                    Button("Quick Verify All") {
+                        queueManager.verifyAllCompleted(mode: .quick)
+                    }
+                    Button("Full Verify All") {
+                        queueManager.verifyAllCompleted(mode: .full)
+                    }
+                } label: {
+                    Label("Verify (\(queueManager.unverifiedCompletedCount))", systemImage: "checkmark.seal")
+                        .font(.caption)
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+            }
+
+            // Cancel verification
+            if queueManager.isVerifying {
+                Button {
+                    queueManager.cancelVerification()
+                } label: {
+                    Label("Stop Verify", systemImage: "stop.fill")
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
 
             // Cancel all pending
             if queueManager.pendingCount > 0 && !queueManager.isProcessing {
@@ -280,9 +318,7 @@ struct JobRowView: View {
             }
 
         case .completed:
-            Text("Done")
-                .font(.caption2)
-                .foregroundStyle(.green)
+            completedTrailingContent
 
         case .failed(let error):
             HStack(spacing: 4) {
@@ -321,6 +357,89 @@ struct JobRowView: View {
         }
     }
 
+    /// Content shown for completed jobs (verification status + controls)
+    @ViewBuilder
+    private var completedTrailingContent: some View {
+        switch job.verificationStatus {
+        case .unverified:
+            HStack(spacing: 6) {
+                Text("Done")
+                    .font(.caption2)
+                    .foregroundStyle(.green)
+
+                // Verify menu
+                Menu {
+                    Button {
+                        queueManager.verifyJob(job.id, mode: .quick)
+                    } label: {
+                        Label("Quick Verify", systemImage: "bolt")
+                    }
+                    Button {
+                        queueManager.verifyJob(job.id, mode: .full)
+                    } label: {
+                        Label("Full Verify", systemImage: "checkmark.seal")
+                    }
+                } label: {
+                    Image(systemName: "checkmark.seal")
+                        .font(.caption)
+                        .foregroundStyle(.blue)
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .help("Verify output file")
+            }
+
+        case .verifying:
+            VStack(alignment: .trailing, spacing: 2) {
+                ProgressView(value: job.verificationProgress)
+                    .frame(width: 60)
+                Text("Verifying...")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.orange)
+            }
+
+        case .verified:
+            HStack(spacing: 4) {
+                Image(systemName: "checkmark.seal.fill")
+                    .foregroundStyle(.green)
+                Text("Verified")
+                    .font(.caption2)
+                    .foregroundStyle(.green)
+            }
+            .help(job.verificationResult?.summary ?? "File verified successfully")
+
+        case .failed(let error):
+            HStack(spacing: 4) {
+                Image(systemName: "xmark.seal.fill")
+                    .foregroundStyle(.red)
+                Text("Verify Failed")
+                    .font(.caption2)
+                    .foregroundStyle(.red)
+                    .help(error)
+
+                // Retry verification
+                Menu {
+                    Button {
+                        queueManager.verifyJob(job.id, mode: .quick)
+                    } label: {
+                        Label("Retry Quick", systemImage: "bolt")
+                    }
+                    Button {
+                        queueManager.verifyJob(job.id, mode: .full)
+                    } label: {
+                        Label("Retry Full", systemImage: "checkmark.seal")
+                    }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.caption2)
+                        .foregroundStyle(.blue)
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+            }
+        }
+    }
+
     private var backgroundColor: Color {
         switch job.status {
         case .active, .preparing:
@@ -328,6 +447,10 @@ struct JobRowView: View {
         case .failed:
             return Color.red.opacity(0.05)
         default:
+            // Highlight if currently verifying
+            if job.verificationStatus == .verifying {
+                return Color.orange.opacity(0.1)
+            }
             return Color.clear
         }
     }

@@ -16,9 +16,12 @@ class QueueManager: ObservableObject {
 
     // MARK: - Private
     private let ffmpeg = FFmpegWrapper()
+    private let verificationService = VerificationService()
     private var currentJobId: UUID?
+    private var currentVerificationJobId: UUID?
     private var sleepAssertionID: IOPMAssertionID = 0
     private var isSleepPrevented = false
+    @Published private(set) var isVerifying = false
 
     // MARK: - Persistence
     private static let queueFileName = "queue.json"
@@ -450,5 +453,164 @@ class QueueManager: ObservableObject {
 
             log("Created: \(clipOutputURL.lastPathComponent)")
         }
+    }
+
+    // MARK: - Verification
+
+    /// Number of jobs pending verification
+    var unverifiedCompletedCount: Int {
+        jobs.filter { $0.status == .completed && $0.verificationStatus == .unverified }.count
+    }
+
+    /// Verifies a completed job
+    /// - Parameters:
+    ///   - jobId: The job to verify
+    ///   - mode: Quick or Full verification
+    func verifyJob(_ jobId: UUID, mode: VerificationMode) {
+        guard let index = jobs.firstIndex(where: { $0.id == jobId }),
+              jobs[index].status == .completed else {
+            return
+        }
+
+        Task {
+            await performVerification(index: index, mode: mode)
+        }
+    }
+
+    /// Verifies all completed but unverified jobs
+    func verifyAllCompleted(mode: VerificationMode) {
+        let unverifiedJobs = jobs.enumerated().filter {
+            $0.element.status == .completed && $0.element.verificationStatus == .unverified
+        }
+
+        guard !unverifiedJobs.isEmpty else { return }
+
+        Task {
+            for (index, _) in unverifiedJobs {
+                // Check if verification was cancelled
+                guard !verificationService.isCancelling else { break }
+                await performVerification(index: index, mode: mode)
+            }
+        }
+    }
+
+    /// Performs verification on a job at the given index
+    private func performVerification(index: Int, mode: VerificationMode) async {
+        guard index < jobs.count else { return }
+
+        let job = jobs[index]
+        currentVerificationJobId = job.id
+        isVerifying = true
+        jobs[index].verificationStatus = .verifying
+        jobs[index].verificationProgress = 0
+
+        log("--- Verifying: \(job.displayName) (\(mode.rawValue)) ---")
+
+        do {
+            // For individual mode, verify each output file
+            if job.settings.processingMode == .individual {
+                try await verifyIndividualJobOutputs(job: job, index: index, mode: mode)
+            } else {
+                // For concatenate mode, verify single output file
+                let result = try await verificationService.verify(
+                    fileURL: job.destinationURL,
+                    mode: mode,
+                    expectedFrames: job.totalDurationFrames,
+                    progress: { [weak self] progress, message in
+                        Task { @MainActor in
+                            self?.jobs[index].verificationProgress = progress
+                        }
+                    },
+                    logHandler: { [weak self] message in
+                        Task { @MainActor in
+                            self?.log(message)
+                        }
+                    }
+                )
+
+                jobs[index].verificationResult = result
+                jobs[index].verificationStatus = result.passed ? .verified : .failed(result.errorMessage ?? "Unknown error")
+            }
+
+        } catch VerificationService.VerificationError.cancelled {
+            jobs[index].verificationStatus = .unverified
+            jobs[index].verificationProgress = 0
+            log("Verification cancelled")
+        } catch {
+            jobs[index].verificationStatus = .failed(error.localizedDescription)
+            log("Verification failed: \(error.localizedDescription)")
+        }
+
+        currentVerificationJobId = nil
+        isVerifying = jobs.contains { $0.verificationStatus == .verifying }
+        saveQueue()
+    }
+
+    /// Verifies individual output files from an individual-mode job
+    private func verifyIndividualJobOutputs(job: ConversionJob, index: Int, mode: VerificationMode) async throws {
+        let outputDir = job.destinationURL
+        let ext = job.settings.outputContainer.fileExtension
+
+        var allPassed = true
+        var failedClips: [String] = []
+
+        for (clipIndex, clip) in job.clips.enumerated() {
+            let clipOutputURL = outputDir.appendingPathComponent("\(clip.displayName).\(ext)")
+
+            log("Verifying [\(clipIndex + 1)/\(job.clips.count)]: \(clip.displayName)")
+
+            let result = try await verificationService.verify(
+                fileURL: clipOutputURL,
+                mode: mode,
+                expectedFrames: clip.durationFrames,
+                progress: { [weak self] progress, message in
+                    Task { @MainActor in
+                        let baseProgress = Double(clipIndex) / Double(job.clips.count)
+                        let clipContribution = progress / Double(job.clips.count)
+                        self?.jobs[index].verificationProgress = baseProgress + clipContribution
+                    }
+                },
+                logHandler: { [weak self] message in
+                    Task { @MainActor in
+                        self?.log(message)
+                    }
+                }
+            )
+
+            if !result.passed {
+                allPassed = false
+                failedClips.append(clip.displayName)
+            }
+        }
+
+        if allPassed {
+            jobs[index].verificationStatus = .verified
+            jobs[index].verificationResult = VerificationResult(
+                fileURL: outputDir,
+                passed: true,
+                mode: mode,
+                duration: 0,
+                framesDecoded: job.totalDurationFrames,
+                totalFrames: job.totalDurationFrames,
+                decodingSpeed: nil,
+                containerValid: true,
+                errorMessage: nil,
+                verifiedAt: Date()
+            )
+        } else {
+            let errorMsg = "Failed clips: \(failedClips.joined(separator: ", "))"
+            jobs[index].verificationStatus = .failed(errorMsg)
+        }
+    }
+
+    /// Cancels the current verification
+    func cancelVerification() {
+        verificationService.cancel()
+        if let jobId = currentVerificationJobId,
+           let index = jobs.firstIndex(where: { $0.id == jobId }) {
+            jobs[index].verificationStatus = .unverified
+            jobs[index].verificationProgress = 0
+        }
+        isVerifying = false
     }
 }
