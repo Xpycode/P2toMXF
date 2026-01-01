@@ -8,11 +8,21 @@ class ConversionViewModel: ObservableObject {
     private let ffmpeg = FFmpegWrapper()
     let thumbnailManager: ThumbnailManager
 
-    // State
-    @Published var p2Card: P2Card?
+    // State - Multiple cards support
+    @Published var loadedCards: [P2Card] = []
+    @Published var activeCardId: UUID?
     @Published var selectedClips: Set<UUID> = []
     @Published var conversionStatus: [UUID: ConversionStatus] = [:]
     @Published var settings = ConversionSettings()
+
+    /// Currently active card for display and operations
+    var activeCard: P2Card? {
+        guard let id = activeCardId else { return loadedCards.first }
+        return loadedCards.first { $0.id == id }
+    }
+
+    /// Backwards compatibility alias
+    var p2Card: P2Card? { activeCard }
 
     @Published var isLoading = false
     @Published var isConverting = false
@@ -254,19 +264,21 @@ class ConversionViewModel: ObservableObject {
     // MARK: - P2 Card Loading
 
     func loadP2Card(from url: URL) {
+        // Check if this card is already loaded (by path)
+        if loadedCards.contains(where: { $0.rootPath == url }) {
+            errorMessage = "This P2 card is already loaded"
+            return
+        }
+
         isLoading = true
         errorMessage = nil
-
-        // Clear thumbnail cache when loading new card
-        Task {
-            await thumbnailManager.clearCache()
-        }
 
         Task {
             do {
                 let card = try parser.parseP2Card(at: url)
-                self.p2Card = card
-                // Auto-select all clips
+                self.loadedCards.append(card)
+                self.activeCardId = card.id
+                // Auto-select all clips in the new card
                 self.selectedClips = Set(card.clips.map { $0.id })
                 self.conversionStatus = [:]
             } catch {
@@ -274,6 +286,35 @@ class ConversionViewModel: ObservableObject {
             }
             self.isLoading = false
         }
+    }
+
+    /// Set the active card and update selection
+    func setActiveCard(_ card: P2Card) {
+        activeCardId = card.id
+        // Select all clips in the newly active card
+        selectedClips = Set(card.clips.map { $0.id })
+        conversionStatus = [:]
+    }
+
+    /// Remove a card from the loaded cards list
+    func removeCard(_ card: P2Card) {
+        loadedCards.removeAll { $0.id == card.id }
+
+        // If we removed the active card, switch to another
+        if activeCardId == card.id {
+            activeCardId = loadedCards.first?.id
+            if let newActive = activeCard {
+                selectedClips = Set(newActive.clips.map { $0.id })
+            } else {
+                selectedClips = []
+            }
+        }
+        conversionStatus = [:]
+    }
+
+    /// Check if a card is the active one
+    func isActiveCard(_ card: P2Card) -> Bool {
+        activeCardId == card.id || (activeCardId == nil && loadedCards.first?.id == card.id)
     }
 
     // MARK: - Selection

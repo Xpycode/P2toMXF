@@ -94,10 +94,13 @@ struct P2Clip: Identifiable, Hashable, Codable {
 }
 
 /// Represents a complete P2 card with all its clips
-struct P2Card: Identifiable {
-    let id = UUID()
-    let rootPath: URL
+struct P2Card: Identifiable, Codable {
+    let id: UUID
+    private let rootPathString: String
     let clips: [P2Clip]
+
+    // URL accessor
+    var rootPath: URL { URL(fileURLWithPath: rootPathString) }
 
     var name: String {
         rootPath.lastPathComponent
@@ -105,6 +108,29 @@ struct P2Card: Identifiable {
 
     var clipCount: Int {
         clips.count
+    }
+
+    /// Total duration of all clips in frames
+    var totalDurationFrames: Int {
+        clips.reduce(0) { $0 + $1.durationFrames }
+    }
+
+    /// Human-readable total duration
+    var formattedDuration: String {
+        guard let fps = clips.first?.frameRateDouble, fps > 0 else { return "--:--:--" }
+        let tc = Timecode.from(frames: totalDurationFrames, frameRate: fps)
+        return tc.description
+    }
+
+    init(rootPath: URL, clips: [P2Clip]) {
+        self.id = UUID()
+        self.rootPathString = rootPath.path
+        self.clips = clips
+    }
+
+    // Codable
+    enum CodingKeys: String, CodingKey {
+        case id, rootPathString, clips
     }
 }
 

@@ -18,23 +18,42 @@ struct ContentView: View {
 
             Divider()
 
-            // Main content
-            if let card = viewModel.p2Card {
-                clipListView(card: card)
-            } else {
-                emptyStateView
-            }
+            // Three-column layout: Cards | Clips | Queue
+            HSplitView {
+                // Left: Card list
+                CardListView(viewModel: viewModel, showingP2Picker: $showingP2Picker)
+                    .fileImporter(
+                        isPresented: $showingP2Picker,
+                        allowedContentTypes: [.folder],
+                        allowsMultipleSelection: false
+                    ) { result in
+                        if case .success(let urls) = result, let url = urls.first {
+                            _ = url.startAccessingSecurityScopedResource()
+                            viewModel.loadP2Card(from: url)
+                        }
+                    }
 
-            // Queue panel
-            if showQueue {
-                Divider()
-                QueueListView()
-            }
+                // Middle: Clip list for active card
+                VStack(spacing: 0) {
+                    if let card = viewModel.activeCard {
+                        clipListView(card: card)
+                    } else {
+                        emptyStateView
+                    }
 
-            // Console output (now shows queue console when queue is active)
-            if showConsole {
-                Divider()
-                consoleView
+                    // Console output (below clip list)
+                    if showConsole {
+                        Divider()
+                        consoleView
+                    }
+                }
+                .frame(minWidth: 400)
+
+                // Right: Queue panel
+                if showQueue {
+                    QueueListView()
+                        .frame(minWidth: 220, idealWidth: 280, maxWidth: 350)
+                }
             }
 
             Divider()
@@ -44,7 +63,7 @@ struct ContentView: View {
                 .padding()
                 .background(.ultraThinMaterial)
         }
-        .frame(minWidth: 850, minHeight: 550)
+        .frame(minWidth: 950, minHeight: 600)
         .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
             Button("OK") { viewModel.errorMessage = nil }
         } message: {
@@ -56,20 +75,13 @@ struct ContentView: View {
 
     private var headerView: some View {
         HStack {
-            // Left: Load P2 Card button
-            Button {
-                showingP2Picker = true
-            } label: {
-                Label("Load P2 Card", systemImage: "folder.badge.plus")
-            }
-            .fileImporter(
-                isPresented: $showingP2Picker,
-                allowedContentTypes: [.folder],
-                allowsMultipleSelection: false
-            ) { result in
-                if case .success(let urls) = result, let url = urls.first {
-                    _ = url.startAccessingSecurityScopedResource()
-                    viewModel.loadP2Card(from: url)
+            // Left: Card count summary
+            if !viewModel.loadedCards.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "sdcard.fill")
+                        .foregroundStyle(.secondary)
+                    Text("\(viewModel.loadedCards.count) card\(viewModel.loadedCards.count == 1 ? "" : "s")")
+                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -93,7 +105,9 @@ struct ContentView: View {
             HStack(spacing: 12) {
                 // Queue toggle
                 Button {
-                    showQueue.toggle()
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showQueue.toggle()
+                    }
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: showQueue ? "list.bullet.rectangle.fill" : "list.bullet.rectangle")
@@ -111,7 +125,9 @@ struct ContentView: View {
 
                 // Console toggle
                 Button {
-                    showConsole.toggle()
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showConsole.toggle()
+                    }
                 } label: {
                     Image(systemName: showConsole ? "terminal.fill" : "terminal")
                 }
@@ -202,11 +218,11 @@ struct ContentView: View {
                 .font(.system(size: 48))
                 .foregroundStyle(.secondary)
 
-            Text("No P2 Card Loaded")
+            Text("No Card Selected")
                 .font(.title2)
                 .foregroundStyle(.secondary)
 
-            Text("Click \"Load P2 Card\" to select a P2 card folder")
+            Text("Load a P2 card from the panel on the left")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }
@@ -378,7 +394,7 @@ struct ContentView: View {
                             .fixedSize()
 
                         if viewModel.settings.useFolderNameAsFilename {
-                            Text(viewModel.p2Card?.name ?? "No card loaded")
+                            Text(viewModel.activeCard?.name ?? "No card selected")
                                 .lineLimit(1)
                                 .truncationMode(.tail)
                                 .frame(maxWidth: .infinity, alignment: .leading)
