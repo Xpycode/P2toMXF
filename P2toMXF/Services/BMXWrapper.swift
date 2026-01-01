@@ -8,6 +8,7 @@ class BMXWrapper {
         case bmxNotFound
         case conversionFailed(String)
         case invalidInput(String)
+        case cancelled  // User-initiated cancellation
 
         var errorDescription: String? {
             switch self {
@@ -17,6 +18,8 @@ class BMXWrapper {
                 return "BMX conversion failed: \(msg)"
             case .invalidInput(let msg):
                 return "Invalid input: \(msg)"
+            case .cancelled:
+                return "BMX operation was cancelled"
             }
         }
     }
@@ -27,6 +30,7 @@ class BMXWrapper {
     typealias LogHandler = (String) -> Void
 
     private var currentProcess: Process?
+    private var isCancelling = false  // Flag to distinguish cancellation from failure
 
     /// Path to the bundled bmxtranswrap binary
     var bmxTranswrapPath: URL? {
@@ -212,16 +216,21 @@ class BMXWrapper {
                 }
             }
 
-            process.terminationHandler = { proc in
+            process.terminationHandler = { [weak self] proc in
                 outputPipe.fileHandleForReading.readabilityHandler = nil
                 errorPipe.fileHandleForReading.readabilityHandler = nil
 
+                let wasCancelled = self?.isCancelling ?? false
+
                 DispatchQueue.main.async {
-                    logHandler("BMX exit code: \(proc.terminationStatus)")
+                    logHandler("BMX exit code: \(proc.terminationStatus)\(wasCancelled ? " (cancelled)" : "")")
                 }
 
                 if proc.terminationStatus == 0 {
                     continuation.resume()
+                } else if wasCancelled {
+                    // Process was terminated by user cancellation
+                    continuation.resume(throwing: BMXError.cancelled)
                 } else {
                     let errorOutput = errorCollector.output + outputCollector.output
                     DispatchQueue.main.async {
@@ -252,9 +261,29 @@ class BMXWrapper {
     }
 
     /// Cancels any running operation
+    /// Uses process group killing to ensure child processes are also terminated
     func cancel() {
-        currentProcess?.terminate()
+        isCancelling = true
+
+        if let process = currentProcess, process.isRunning {
+            let pid = process.processIdentifier
+
+            // Kill the entire process group to catch any child processes
+            let pgid = getpgid(pid)
+            if pgid > 0 {
+                kill(-pgid, SIGTERM)  // Negative PID = kill process group
+            }
+
+            // Also terminate via Swift API as backup
+            process.terminate()
+        }
+
         currentProcess = nil
+    }
+
+    /// Resets cancellation state - call before starting new operation
+    func resetCancellation() {
+        isCancelling = false
     }
 
     /// Gets BMX version info for display

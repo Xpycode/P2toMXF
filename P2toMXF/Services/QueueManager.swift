@@ -204,6 +204,7 @@ class QueueManager: ObservableObject {
         currentJobId = job.id
         jobs[index].status = .preparing
         jobs[index].progress = 0
+        jobs[index].startedAt = Date()
 
         log("--- Starting job: \(job.displayName) ---")
         log("Card: \(job.cardName)")

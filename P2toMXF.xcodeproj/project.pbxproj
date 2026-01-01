@@ -22,6 +22,7 @@
 		A0100000A /* ThumbnailManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0200000C /* ThumbnailManager.swift */; };
 		A0100000B /* QueueManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0200000D /* QueueManager.swift */; };
 		A0100000C /* QueueListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0200000E /* QueueListView.swift */; };
+		A0100000D /* ProgressControlPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0200000F /* ProgressControlPanel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -42,6 +43,7 @@
 		A0200000C /* ThumbnailManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbnailManager.swift; sourceTree = "<group>"; };
 		A0200000D /* QueueManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueueManager.swift; sourceTree = "<group>"; };
 		A0200000E /* QueueListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueueListView.swift; sourceTree = "<group>"; };
+		A0200000F /* ProgressControlPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressControlPanel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -130,6 +132,7 @@
 			isa = PBXGroup;
 			children = (
 				A0200000E /* QueueListView.swift */,
+				A0200000F /* ProgressControlPanel.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -253,6 +256,7 @@
 				A0100000A /* ThumbnailManager.swift in Sources */,
 				A0100000B /* QueueManager.swift in Sources */,
 				A0100000C /* QueueListView.swift in Sources */,
+				A0100000D /* ProgressControlPanel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

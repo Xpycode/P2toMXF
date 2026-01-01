@@ -24,6 +24,12 @@ class ConversionViewModel: ObservableObject {
     /// Feedback message after adding to queue
     @Published var queueFeedback: String?
 
+    /// Current progress metrics for active conversion
+    @Published var progressMetrics = ProgressMetrics()
+
+    /// Timer for updating elapsed time display
+    private var elapsedTimer: Timer?
+
     var hasFFmpeg: Bool {
         ffmpeg.isFFmpegAvailable
     }
@@ -35,6 +41,40 @@ class ConversionViewModel: ObservableObject {
 
     func clearConsole() {
         consoleLog = ""
+    }
+
+    // MARK: - Progress Timer
+
+    /// Starts the elapsed time timer and initializes progress metrics
+    private func startProgressTimer(totalClips: Int) {
+        progressMetrics = ProgressMetrics()
+        progressMetrics.startTime = Date()
+        progressMetrics.totalClips = totalClips
+        progressMetrics.phase = "Starting..."
+
+        // Update elapsed time every second for smooth UI updates
+        elapsedTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                // Trigger UI update by touching the progressMetrics
+                // The elapsedSeconds computed property will recalculate
+                self?.objectWillChange.send()
+            }
+        }
+    }
+
+    /// Stops the elapsed time timer
+    private func stopProgressTimer() {
+        elapsedTimer?.invalidate()
+        elapsedTimer = nil
+    }
+
+    /// Updates progress metrics from FFmpeg callback
+    private func updateMetrics(_ metrics: ProgressMetrics) {
+        // Preserve startTime from our timer
+        var updated = metrics
+        updated.startTime = progressMetrics.startTime
+        updated.totalClips = progressMetrics.totalClips
+        progressMetrics = updated
     }
 
     var selectedClipCount: Int {
@@ -284,6 +324,7 @@ class ConversionViewModel: ObservableObject {
     private func startConcatenateConversion(clips: [P2Clip], outputDir: URL, ext: String) {
         let groups = fullySelectedGroups
         let groupCount = groups.count
+        let totalClips = groups.reduce(0) { $0 + $1.clipCount }
 
         log("Starting merge of \(groupCount) group(s) to \(ext.uppercased())")
         log("Output directory: \(outputDir.path)")
@@ -296,7 +337,12 @@ class ConversionViewModel: ObservableObject {
             }
         }
 
+        // Start progress timer
+        startProgressTimer(totalClips: totalClips)
+
         Task {
+            defer { stopProgressTimer() }
+
             var successCount = 0
             var failCount = 0
 
@@ -325,15 +371,26 @@ class ConversionViewModel: ObservableObject {
                 }
 
                 do {
-                    try await ffmpeg.mergeClips(group.clips, to: outputURL, settings: settings) { progress, _ in
+                    // Update phase for this group
+                    progressMetrics.phase = "Group \(groupIdx + 1)/\(groupCount): \(group.clipCount) clips"
+                    progressMetrics.currentClipIndex = groupIdx + 1
+
+                    try await ffmpeg.mergeClips(group.clips, to: outputURL, settings: settings) { progress, status in
                         Task { @MainActor in
                             for clip in group.clips {
                                 self.conversionStatus[clip.id] = .inProgress(progress: progress)
                             }
+                            // Update phase with current status
+                            self.progressMetrics.phase = status
+                            self.progressMetrics.progress = progress
                         }
                     } logHandler: { message in
                         Task { @MainActor in
                             self.log(message)
+                        }
+                    } metricsHandler: { metrics in
+                        Task { @MainActor in
+                            self.updateMetrics(metrics)
                         }
                     }
 
@@ -343,6 +400,15 @@ class ConversionViewModel: ObservableObject {
                             conversionStatus[clip.id] = .pending
                         }
                     } else {
+                        // Brief finalizing state for cleanup phase
+                        for clip in group.clips {
+                            conversionStatus[clip.id] = .finalizing
+                        }
+                        progressMetrics.phase = "Finalizing \(outputName)..."
+
+                        // Small delay to show finalizing state (cleanup happens here)
+                        try? await Task.sleep(for: .milliseconds(200))
+
                         for clip in group.clips {
                             conversionStatus[clip.id] = .completed
                         }
@@ -350,6 +416,33 @@ class ConversionViewModel: ObservableObject {
                         successCount += 1
                     }
 
+                } catch is CancellationError {
+                    // Swift Task.checkCancellation() throws CancellationError
+                    for clip in group.clips {
+                        conversionStatus[clip.id] = .pending
+                    }
+                    log("Cancelled before completing \(group.clipCount) clips")
+                    break
+                } catch let error as FFmpegWrapper.FFmpegError {
+                    // Check if it's a cancellation
+                    if case .cancelled = error {
+                        for clip in group.clips {
+                            conversionStatus[clip.id] = .pending
+                        }
+                        break
+                    }
+                    // Other FFmpeg errors
+                    if !isCancelled {
+                        for clip in group.clips {
+                            conversionStatus[clip.id] = .failed(error: error.localizedDescription)
+                        }
+                        log("FAILED: \(error.localizedDescription)")
+                        failCount += 1
+                    } else {
+                        for clip in group.clips {
+                            conversionStatus[clip.id] = .pending
+                        }
+                    }
                 } catch {
                     // Don't show error if cancelled
                     if !isCancelled {
@@ -384,7 +477,12 @@ class ConversionViewModel: ObservableObject {
             conversionStatus[clip.id] = .pending
         }
 
+        // Start progress timer
+        startProgressTimer(totalClips: clips.count)
+
         Task {
+            defer { stopProgressTimer() }
+
             var successCount = 0
             var failCount = 0
 
@@ -401,14 +499,30 @@ class ConversionViewModel: ObservableObject {
                 log("[\(index + 1)/\(clips.count)] Converting \(clip.displayName)...")
                 conversionStatus[clip.id] = .inProgress(progress: 0)
 
+                // Update phase for this clip
+                progressMetrics.phase = "Clip \(index + 1)/\(clips.count): \(clip.displayName)"
+                progressMetrics.currentClipIndex = index + 1
+
                 do {
-                    try await ffmpeg.rewrapSingleClip(clip, to: outputURL, outputFormat: ext, settings: settings) { progress, _ in
+                    try await ffmpeg.rewrapSingleClip(clip, to: outputURL, outputFormat: ext, settings: settings) { progress, status in
                         Task { @MainActor in
                             self.conversionStatus[clip.id] = .inProgress(progress: progress)
+                            // Calculate overall progress across all clips
+                            let overallProgress = (Double(index) + progress) / Double(clips.count)
+                            self.progressMetrics.progress = overallProgress
+                            self.progressMetrics.phase = status.isEmpty ? "Clip \(index + 1)/\(clips.count)" : status
                         }
                     } logHandler: { message in
                         Task { @MainActor in
                             self.log(message)
+                        }
+                    } metricsHandler: { metrics in
+                        Task { @MainActor in
+                            // Adjust progress for overall clip context
+                            var adjusted = metrics
+                            adjusted.progress = (Double(index) + metrics.progress) / Double(clips.count)
+                            adjusted.currentClipIndex = index + 1
+                            self.updateMetrics(adjusted)
                         }
                     }
 
@@ -416,11 +530,37 @@ class ConversionViewModel: ObservableObject {
                     if isCancelled {
                         conversionStatus[clip.id] = .pending
                     } else {
+                        // Brief finalizing state for cleanup phase
+                        conversionStatus[clip.id] = .finalizing
+                        progressMetrics.phase = "Finalizing \(outputName)..."
+
+                        // Small delay to show finalizing state
+                        try? await Task.sleep(for: .milliseconds(200))
+
                         conversionStatus[clip.id] = .completed
                         log("SUCCESS: Created \(outputName)")
                         successCount += 1
                     }
 
+                } catch is CancellationError {
+                    // Swift Task.checkCancellation() throws CancellationError
+                    conversionStatus[clip.id] = .pending
+                    log("Cancelled during \(clip.displayName)")
+                    break
+                } catch let error as FFmpegWrapper.FFmpegError {
+                    // Check if it's a cancellation
+                    if case .cancelled = error {
+                        conversionStatus[clip.id] = .pending
+                        break
+                    }
+                    // Other FFmpeg errors
+                    if !isCancelled {
+                        conversionStatus[clip.id] = .failed(error: error.localizedDescription)
+                        log("FAILED: \(clip.displayName) - \(error.localizedDescription)")
+                        failCount += 1
+                    } else {
+                        conversionStatus[clip.id] = .pending
+                    }
                 } catch {
                     // Don't show error if cancelled
                     if !isCancelled {

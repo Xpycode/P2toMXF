@@ -193,10 +193,95 @@ struct Timecode: Equatable {
     }
 }
 
+// MARK: - Progress Tracking
+
+/// Metrics for tracking conversion progress with detailed statistics
+struct ProgressMetrics {
+    /// Overall progress from 0.0 to 1.0
+    var progress: Double = 0.0
+
+    /// Current phase description (e.g., "Rewrapping clip 3/10...")
+    var phase: String = ""
+
+    /// Current clip index being processed (1-based for display)
+    var currentClipIndex: Int = 0
+
+    /// Total number of clips to process
+    var totalClips: Int = 0
+
+    /// When the conversion started
+    var startTime: Date?
+
+    /// Elapsed time in seconds since start
+    var elapsedSeconds: TimeInterval {
+        guard let start = startTime else { return 0 }
+        return Date().timeIntervalSince(start)
+    }
+
+    /// Estimated time remaining in seconds (based on current progress)
+    var estimatedRemainingSeconds: TimeInterval? {
+        guard progress > 0.05 else { return nil }  // Need at least 5% to estimate
+        let elapsed = elapsedSeconds
+        guard elapsed > 0 else { return nil }
+        let totalEstimated = elapsed / progress
+        return max(0, totalEstimated - elapsed)
+    }
+
+    /// FFmpeg-reported speed (e.g., "12.5x")
+    var speed: String?
+
+    /// FFmpeg-reported fps
+    var fps: Double?
+
+    /// FFmpeg-reported processed time (e.g., "00:01:23.45")
+    var processedTime: String?
+
+    /// FFmpeg-reported current frame number
+    var currentFrame: Int?
+
+    /// Total expected frames (if known)
+    var totalFrames: Int?
+
+    /// Format elapsed time as MM:SS or HH:MM:SS
+    var formattedElapsed: String {
+        formatTimeInterval(elapsedSeconds)
+    }
+
+    /// Format estimated remaining as MM:SS or HH:MM:SS
+    var formattedRemaining: String? {
+        guard let remaining = estimatedRemainingSeconds else { return nil }
+        return formatTimeInterval(remaining)
+    }
+
+    /// Format speed and fps for display
+    var formattedSpeed: String? {
+        if let speed = speed {
+            return speed
+        } else if let fps = fps {
+            return String(format: "%.1f fps", fps)
+        }
+        return nil
+    }
+
+    private func formatTimeInterval(_ interval: TimeInterval) -> String {
+        let totalSeconds = Int(interval)
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let seconds = totalSeconds % 60
+
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            return String(format: "%d:%02d", minutes, seconds)
+        }
+    }
+}
+
 /// Status of a clip during conversion
 enum ConversionStatus: Equatable {
     case pending
     case inProgress(progress: Double)
+    case finalizing  // File move/cleanup phase after processing
     case completed
     case failed(error: String)
 
@@ -204,6 +289,7 @@ enum ConversionStatus: Equatable {
         switch self {
         case .pending: return "Pending"
         case .inProgress(let progress): return "Merging \(Int(progress * 100))%"
+        case .finalizing: return "Finalizing..."
         case .completed: return "Completed"
         case .failed(let error): return "Failed: \(error)"
         }
@@ -263,6 +349,7 @@ struct ConversionJob: Identifiable {
 
     var status: JobStatus = .pending
     var progress: Double = 0.0    // 0.0 to 1.0
+    var startedAt: Date?          // When processing started (for elapsed time)
 
     /// Display name for the job (uses output filename or card name)
     var displayName: String {

@@ -10,6 +10,7 @@ class FFmpegWrapper {
         case bmxNotFound
         case conversionFailed(String)
         case invalidInput(String)
+        case cancelled  // User-initiated cancellation
 
         var errorDescription: String? {
             switch self {
@@ -21,6 +22,8 @@ class FFmpegWrapper {
                 return "Conversion failed: \(msg)"
             case .invalidInput(let msg):
                 return "Invalid input: \(msg)"
+            case .cancelled:
+                return "Conversion was cancelled"
             }
         }
     }
@@ -29,8 +32,21 @@ class FFmpegWrapper {
     typealias ProgressHandler = (Double, String) -> Void
     /// Log callback for console output
     typealias LogHandler = (String) -> Void
+    /// Metrics callback for detailed progress info
+    typealias MetricsHandler = (ProgressMetrics) -> Void
+
+    /// Parsed metrics from FFmpeg output
+    struct FFmpegOutputMetrics {
+        var frame: Int?
+        var fps: Double?
+        var speed: String?
+        var time: String?
+        var bitrate: String?
+        var size: String?
+    }
 
     private var currentProcess: Process?
+    private var isCancelling = false  // Flag to distinguish cancellation from failure
     private let bmxWrapper = BMXWrapper()
 
     /// Path to the bundled FFmpeg binary
@@ -155,16 +171,34 @@ class FFmpegWrapper {
         outputFormat: String = "mxf",
         settings: ConversionSettings,
         progress: @escaping ProgressHandler,
-        logHandler: @escaping LogHandler = { _ in }
+        logHandler: @escaping LogHandler = { _ in },
+        metricsHandler: MetricsHandler? = nil
     ) async throws {
+        // Reset cancellation state at start of new operation
+        resetCancellation()
+        bmxWrapper.resetCancellation()
+
+        // Calculate total frames for this clip
+        let totalFrames = clip.durationFrames
+
         if outputFormat == "mxf" && bmxWrapper.isBMXAvailable {
             // Use BMX for MXF output (handles P2 index tables correctly)
             logHandler("Using BMX for MXF rewrap...")
+            logHandler("Total frames: \(totalFrames)")
             try await bmxWrapper.rewrapClip(clip, to: outputURL, progress: progress, logHandler: logHandler)
         } else {
             // Use FFmpeg for MOV output (stream copy works fine)
             logHandler("Using FFmpeg for MOV rewrap...")
-            try await rewrapClipWithFFmpeg(clip, to: outputURL, settings: settings, progress: progress, logHandler: logHandler)
+            logHandler("Total frames: \(totalFrames)")
+            try await rewrapClipWithFFmpeg(
+                clip,
+                to: outputURL,
+                settings: settings,
+                totalFrames: totalFrames,
+                progress: progress,
+                logHandler: logHandler,
+                metricsHandler: metricsHandler
+            )
         }
     }
 
@@ -173,8 +207,10 @@ class FFmpegWrapper {
         _ clip: P2Clip,
         to outputURL: URL,
         settings: ConversionSettings,
+        totalFrames: Int? = nil,
         progress: @escaping ProgressHandler,
-        logHandler: @escaping LogHandler
+        logHandler: @escaping LogHandler,
+        metricsHandler: MetricsHandler? = nil
     ) async throws {
         guard let ffmpeg = ffmpegPath else {
             throw FFmpegError.ffmpegNotFound
@@ -210,7 +246,14 @@ class FFmpegWrapper {
         args.append(contentsOf: ["-f", "mov", "-y", outputURL.path])
 
         logHandler("Command: ffmpeg " + args.joined(separator: " "))
-        try await runFFmpeg(at: ffmpeg, arguments: args, progress: progress, logHandler: logHandler)
+        try await runFFmpeg(
+            at: ffmpeg,
+            arguments: args,
+            totalFrames: totalFrames,
+            progress: progress,
+            logHandler: logHandler,
+            metricsHandler: metricsHandler
+        )
     }
 
     /// Merges multiple P2 clips into a single MXF file
@@ -221,13 +264,19 @@ class FFmpegWrapper {
     ///   - settings: Conversion settings
     ///   - progress: Progress callback
     ///   - logHandler: Log callback for console output
+    ///   - metricsHandler: Optional callback for detailed progress metrics
     func mergeClips(
         _ clips: [P2Clip],
         to outputURL: URL,
         settings: ConversionSettings,
         progress: @escaping ProgressHandler,
-        logHandler: @escaping LogHandler = { _ in }
+        logHandler: @escaping LogHandler = { _ in },
+        metricsHandler: MetricsHandler? = nil
     ) async throws {
+        // Reset cancellation state at start of new operation
+        resetCancellation()
+        bmxWrapper.resetCancellation()
+
         guard let ffmpeg = ffmpegPath else {
             logHandler("ERROR: FFmpeg not found!")
             throw FFmpegError.ffmpegNotFound
@@ -265,6 +314,9 @@ class FFmpegWrapper {
 
         if bmxWrapper.isBMXAvailable {
             for (index, clip) in clips.enumerated() {
+                // Check for cancellation before starting each clip
+                try Task.checkCancellation()
+
                 let clipProgress = Double(index) / Double(clips.count) * 0.6  // 60% for rewrap phase
                 progress(clipProgress, "Rewrapping clip \(index + 1) of \(clips.count): \(clip.clipName)")
                 logHandler("Rewrapping: \(clip.clipName)")
@@ -277,14 +329,27 @@ class FFmpegWrapper {
             // Fallback: rewrap to MOV with FFmpeg
             logHandler("BMX not available, falling back to FFmpeg MOV rewrap")
             for (index, clip) in clips.enumerated() {
+                // Check for cancellation before starting each clip
+                try Task.checkCancellation()
+
                 let clipProgress = Double(index) / Double(clips.count) * 0.6
                 progress(clipProgress, "Rewrapping clip \(index + 1) of \(clips.count): \(clip.clipName)")
 
                 let outputFile = tempDir.appendingPathComponent("\(clip.clipName).mov")
-                try await rewrapClipWithFFmpeg(clip, to: outputFile, settings: settings, progress: { _, _ in }, logHandler: logHandler)
+                try await rewrapClipWithFFmpeg(
+                    clip,
+                    to: outputFile,
+                    settings: settings,
+                    totalFrames: clip.durationFrames,
+                    progress: { _, _ in },
+                    logHandler: logHandler
+                )
                 rewrappedFiles.append(outputFile)
             }
         }
+
+        // Check for cancellation before starting concatenation phase
+        try Task.checkCancellation()
 
         progress(0.6, "Phase 2: Concatenating with FFmpeg...")
         logHandler("=== Phase 2: FFmpeg Concatenation ===")
@@ -326,12 +391,79 @@ class FFmpegWrapper {
 
         logHandler("Command: ffmpeg " + args.joined(separator: " "))
 
-        try await runFFmpeg(at: ffmpeg, arguments: args, progress: { p, msg in
-            progress(0.6 + p * 0.4, msg)  // Scale to remaining 40%
-        }, logHandler: logHandler)
+        // Calculate total frames for accurate progress
+        let totalFrames = clips.reduce(0) { $0 + $1.durationFrames }
+        logHandler("Total frames to concatenate: \(totalFrames)")
+
+        try await runFFmpeg(
+            at: ffmpeg,
+            arguments: args,
+            totalFrames: totalFrames,
+            progress: { p, msg in
+                progress(0.6 + p * 0.4, msg)  // Scale to remaining 40%
+            },
+            logHandler: logHandler,
+            metricsHandler: metricsHandler.map { handler in
+                { metrics in
+                    // Adjust progress to account for Phase 1 (60%)
+                    var adjustedMetrics = metrics
+                    adjustedMetrics.progress = 0.6 + metrics.progress * 0.4
+                    adjustedMetrics.totalClips = clips.count
+                    handler(adjustedMetrics)
+                }
+            }
+        )
 
         progress(1.0, "Merge complete")
         logHandler("=== Merge Complete ===")
+    }
+
+    /// Parses FFmpeg progress output to extract metrics
+    /// FFmpeg outputs lines like: "frame=  123 fps= 24.5 q=28.0 size=   1234kB time=00:01:23.45 bitrate= 123.4kbits/s speed=12.3x"
+    private func parseFFmpegOutput(_ output: String) -> FFmpegOutputMetrics {
+        var metrics = FFmpegOutputMetrics()
+
+        // Parse frame=
+        if let match = output.range(of: #"frame=\s*(\d+)"#, options: .regularExpression) {
+            let frameStr = output[match].replacingOccurrences(of: "frame=", with: "").trimmingCharacters(in: .whitespaces)
+            metrics.frame = Int(frameStr)
+        }
+
+        // Parse fps=
+        if let match = output.range(of: #"fps=\s*([\d.]+)"#, options: .regularExpression) {
+            let fpsStr = output[match].replacingOccurrences(of: "fps=", with: "").trimmingCharacters(in: .whitespaces)
+            metrics.fps = Double(fpsStr)
+        }
+
+        // Parse speed= (e.g., "12.5x" or "N/A")
+        if let match = output.range(of: #"speed=\s*([\d.]+x|N/A)"#, options: .regularExpression) {
+            let speedStr = output[match].replacingOccurrences(of: "speed=", with: "").trimmingCharacters(in: .whitespaces)
+            if speedStr != "N/A" {
+                metrics.speed = speedStr
+            }
+        }
+
+        // Parse time= (e.g., "00:01:23.45")
+        if let match = output.range(of: #"time=\s*([\d:.]+)"#, options: .regularExpression) {
+            let timeStr = output[match].replacingOccurrences(of: "time=", with: "").trimmingCharacters(in: .whitespaces)
+            if !timeStr.starts(with: "-") {  // Ignore negative times
+                metrics.time = timeStr
+            }
+        }
+
+        // Parse bitrate=
+        if let match = output.range(of: #"bitrate=\s*([\d.]+\s*\w+/s)"#, options: .regularExpression) {
+            let bitrateStr = output[match].replacingOccurrences(of: "bitrate=", with: "").trimmingCharacters(in: .whitespaces)
+            metrics.bitrate = bitrateStr
+        }
+
+        // Parse size=
+        if let match = output.range(of: #"size=\s*([\d.]+\s*\w+)"#, options: .regularExpression) {
+            let sizeStr = output[match].replacingOccurrences(of: "size=", with: "").trimmingCharacters(in: .whitespaces)
+            metrics.size = sizeStr
+        }
+
+        return metrics
     }
 
     /// Thread-safe container for collecting FFmpeg stderr output
@@ -353,11 +485,20 @@ class FFmpegWrapper {
     }
 
     /// Runs FFmpeg with the given arguments
+    /// - Parameters:
+    ///   - ffmpegURL: Path to FFmpeg binary
+    ///   - arguments: Command line arguments
+    ///   - totalFrames: Optional total frame count for accurate progress (if known)
+    ///   - progress: Progress callback (0.0-1.0, status message)
+    ///   - logHandler: Log output callback
+    ///   - metricsHandler: Optional callback for detailed metrics (speed, fps, etc.)
     private func runFFmpeg(
         at ffmpegURL: URL,
         arguments: [String],
+        totalFrames: Int? = nil,
         progress: @escaping ProgressHandler,
-        logHandler: @escaping LogHandler
+        logHandler: @escaping LogHandler,
+        metricsHandler: MetricsHandler? = nil
     ) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let process = Process()
@@ -372,42 +513,83 @@ class FFmpegWrapper {
             let errorCollector = OutputCollector()
 
             // FFmpeg outputs progress info to stderr
-            errorPipe.fileHandleForReading.readabilityHandler = { handle in
+            errorPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
                 let data = handle.availableData
                 if let str = String(data: data, encoding: .utf8), !str.isEmpty {
                     errorCollector.append(str)
 
-                    // Log FFmpeg output
-                    DispatchQueue.main.async {
-                        logHandler("FFmpeg: \(str.trimmingCharacters(in: .whitespacesAndNewlines))")
+                    // Log FFmpeg output (but not the repetitive progress lines)
+                    let trimmed = str.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !trimmed.starts(with: "frame=") {
+                        DispatchQueue.main.async {
+                            logHandler("FFmpeg: \(trimmed)")
+                        }
                     }
 
-                    // Parse progress from FFmpeg output
-                    // FFmpeg outputs lines like: "frame=  123 fps= 24 ..."
-                    if let frameMatch = str.range(of: #"frame=\s*(\d+)"#, options: .regularExpression) {
-                        let frameStr = str[frameMatch].replacingOccurrences(of: "frame=", with: "")
-                            .trimmingCharacters(in: .whitespaces)
-                        if let frame = Int(frameStr) {
-                            // Estimate progress (assuming ~1000 frames typical)
-                            let estimatedProgress = min(0.9, Double(frame) / 1000.0)
-                            DispatchQueue.main.async {
-                                progress(0.1 + estimatedProgress * 0.8, "Merging frame \(frame)...")
+                    // Parse metrics from FFmpeg output
+                    guard let self = self else { return }
+                    let metrics = self.parseFFmpegOutput(str)
+
+                    if let frame = metrics.frame {
+                        // Calculate progress based on frame count
+                        let estimatedProgress: Double
+                        if let total = totalFrames, total > 0 {
+                            estimatedProgress = min(0.99, Double(frame) / Double(total))
+                        } else {
+                            // Fallback: estimate based on 1000 frames
+                            estimatedProgress = min(0.9, Double(frame) / 1000.0)
+                        }
+
+                        // Build status message with metrics
+                        var statusParts: [String] = []
+                        if let total = totalFrames {
+                            statusParts.append("Frame \(frame)/\(total)")
+                        } else {
+                            statusParts.append("Frame \(frame)")
+                        }
+                        if let speed = metrics.speed {
+                            statusParts.append(speed)
+                        } else if let fps = metrics.fps, fps > 0 {
+                            statusParts.append(String(format: "%.0f fps", fps))
+                        }
+
+                        let statusMsg = statusParts.joined(separator: " • ")
+
+                        DispatchQueue.main.async {
+                            progress(estimatedProgress, statusMsg)
+
+                            // Report detailed metrics if handler provided
+                            if let handler = metricsHandler {
+                                var progressMetrics = ProgressMetrics()
+                                progressMetrics.progress = estimatedProgress
+                                progressMetrics.phase = statusMsg
+                                progressMetrics.currentFrame = frame
+                                progressMetrics.totalFrames = totalFrames
+                                progressMetrics.fps = metrics.fps
+                                progressMetrics.speed = metrics.speed
+                                progressMetrics.processedTime = metrics.time
+                                handler(progressMetrics)
                             }
                         }
                     }
                 }
             }
 
-            process.terminationHandler = { proc in
+            process.terminationHandler = { [weak self] proc in
                 outputPipe.fileHandleForReading.readabilityHandler = nil
                 errorPipe.fileHandleForReading.readabilityHandler = nil
 
+                let wasCancelled = self?.isCancelling ?? false
+
                 DispatchQueue.main.async {
-                    logHandler("FFmpeg exit code: \(proc.terminationStatus)")
+                    logHandler("FFmpeg exit code: \(proc.terminationStatus)\(wasCancelled ? " (cancelled)" : "")")
                 }
 
                 if proc.terminationStatus == 0 {
                     continuation.resume()
+                } else if wasCancelled {
+                    // Process was terminated by user cancellation
+                    continuation.resume(throwing: FFmpegError.cancelled)
                 } else {
                     let errorOutput = errorCollector.output
                     DispatchQueue.main.async {
@@ -438,10 +620,31 @@ class FFmpegWrapper {
     }
 
     /// Cancels any running conversion (both FFmpeg and BMX processes)
+    /// Uses process group killing to ensure child processes are also terminated
     func cancelConversion() {
-        currentProcess?.terminate()
+        isCancelling = true
+
+        if let process = currentProcess, process.isRunning {
+            let pid = process.processIdentifier
+
+            // Kill the entire process group to catch any child processes
+            // getpgid returns the process group ID; kill with negative PID targets the group
+            let pgid = getpgid(pid)
+            if pgid > 0 {
+                kill(-pgid, SIGTERM)  // Negative PID = kill process group
+            }
+
+            // Also terminate via Swift API as backup
+            process.terminate()
+        }
+
         currentProcess = nil
         bmxWrapper.cancel()
+    }
+
+    /// Resets cancellation state - call before starting new conversion
+    func resetCancellation() {
+        isCancelling = false
     }
 
     // MARK: - Frame Extraction for Thumbnails

@@ -425,27 +425,34 @@ struct ContentView: View {
 
             Divider()
 
-            // Row 3: Action buttons
-            HStack {
-                // Queue feedback message
-                if let feedback = viewModel.queueFeedback {
-                    Label(feedback, systemImage: "checkmark.circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.green)
-                        .transition(.opacity)
-                }
+            // Row 3: Action buttons OR Progress Panel
+            if isAnyConversionActive {
+                // Progress panel with cancel button
+                HStack(spacing: 16) {
+                    ProgressControlPanel(
+                        metrics: activeProgressMetrics,
+                        onCancel: cancelActiveConversion
+                    )
 
-                Spacer()
-
-                if viewModel.isConverting {
-                    Button("Cancel") {
-                        viewModel.cancelConversion()
+                    Button("Stop") {
+                        cancelActiveConversion()
                     }
                     .buttonStyle(.bordered)
+                    .controlSize(.large)
+                }
+            } else {
+                // Normal action buttons
+                HStack {
+                    // Queue feedback message
+                    if let feedback = viewModel.queueFeedback {
+                        Label(feedback, systemImage: "checkmark.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.green)
+                            .transition(.opacity)
+                    }
 
-                    ProgressView()
-                        .scaleEffect(0.7)
-                } else {
+                    Spacer()
+
                     // Add to Queue button
                     Button {
                         viewModel.addToQueue()
@@ -468,10 +475,42 @@ struct ContentView: View {
                 }
             }
         }
+        .animation(.easeInOut(duration: 0.2), value: isAnyConversionActive)
         .animation(.easeInOut(duration: 0.2), value: viewModel.queueFeedback)
     }
 
     // MARK: - Helpers
+
+    /// True when any conversion is happening (direct or via queue)
+    private var isAnyConversionActive: Bool {
+        viewModel.isConverting || queueManager.isProcessing
+    }
+
+    /// Gets the active progress metrics (from direct conversion or queue)
+    private var activeProgressMetrics: ProgressMetrics {
+        if viewModel.isConverting {
+            return viewModel.progressMetrics
+        } else if queueManager.isProcessing, let activeJob = queueManager.activeJob {
+            // Build metrics from queue job
+            var metrics = ProgressMetrics()
+            metrics.progress = activeJob.progress
+            metrics.phase = "Processing: \(activeJob.displayName)"
+            metrics.currentClipIndex = max(1, Int(activeJob.progress * Double(activeJob.clips.count)) + 1)
+            metrics.totalClips = activeJob.clips.count
+            metrics.startTime = activeJob.startedAt
+            return metrics
+        }
+        return ProgressMetrics()
+    }
+
+    /// Cancel handler for active conversion
+    private func cancelActiveConversion() {
+        if viewModel.isConverting {
+            viewModel.cancelConversion()
+        } else if queueManager.isProcessing {
+            queueManager.cancelCurrentJob()
+        }
+    }
 
     private var convertButtonLabel: String {
         switch viewModel.settings.processingMode {
@@ -676,6 +715,14 @@ struct ClipRowView: View {
                     .frame(width: 60)
                 Text("\(Int(progress * 100))%")
                     .font(.caption.monospacedDigit())
+            }
+        case .finalizing:
+            HStack(spacing: 4) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Finalizing...")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         case .completed:
             Label("Done", systemImage: "checkmark.circle.fill")
