@@ -16,8 +16,33 @@ struct P2Clip: Identifiable, Hashable {
     let audioFiles: [URL]
     let metadataFile: URL
 
+    // Thumbnail sources (may be nil if not present on card)
+    let proxyFile: URL?    // PROXY/{ClipName}.MP4 - fast thumbnail source
+    let iconFile: URL?     // ICON/{ClipName}.BMP - first frame only, low-res fallback
+
     var displayName: String {
         clipName.isEmpty ? globalClipID : clipName
+    }
+
+    /// Frame rate as Double for calculations
+    var frameRateDouble: Double {
+        Double(frameRate) ?? 25.0
+    }
+
+    /// Duration in frames as Int
+    var durationFrames: Int {
+        Int(duration) ?? 0
+    }
+
+    /// Duration in seconds for thumbnail extraction
+    var durationInSeconds: Double {
+        guard frameRateDouble > 0 else { return 0 }
+        return Double(durationFrames) / frameRateDouble
+    }
+
+    /// Timestamp for last frame (one frame before end)
+    var lastFrameTimestamp: Double {
+        max(0, durationInSeconds - (1.0 / frameRateDouble))
     }
 
     /// Duration formatted as HH:MM:SS:FF timecode

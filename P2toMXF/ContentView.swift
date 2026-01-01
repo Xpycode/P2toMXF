@@ -184,7 +184,8 @@ struct ContentView: View {
                 ClipRowView(
                     clip: clip,
                     isSelected: viewModel.selectedClips.contains(clip.id),
-                    status: viewModel.conversionStatus[clip.id]
+                    status: viewModel.conversionStatus[clip.id],
+                    thumbnailManager: viewModel.thumbnailManager
                 )
                 .contentShape(Rectangle())
                 .onTapGesture {
@@ -388,12 +389,25 @@ struct ClipRowView: View {
     let clip: P2Clip
     let isSelected: Bool
     let status: ConversionStatus?
+    let thumbnailManager: ThumbnailManager
+
+    @State private var thumbnails: ThumbnailManager.ClipThumbnails?
+    @State private var isLoadingThumbnails = false
+
+    private let thumbnailHeight: CGFloat = 45
+    private let thumbnailWidth: CGFloat = 80  // 16:9 aspect at 45px height
 
     var body: some View {
         HStack(spacing: 12) {
             // Selection indicator
             Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                 .foregroundStyle(isSelected ? .blue : .secondary)
+
+            // Thumbnails (first & last frame)
+            HStack(spacing: 2) {
+                thumbnailView(image: thumbnails?.first, label: "IN")
+                thumbnailView(image: thumbnails?.last, label: "OUT")
+            }
 
             // Clip info
             VStack(alignment: .leading, spacing: 2) {
@@ -419,6 +433,66 @@ struct ClipRowView: View {
             }
         }
         .padding(.vertical, 4)
+        .task(id: clip.id) {
+            // Lazy load thumbnails when row becomes visible
+            guard thumbnails == nil else { return }
+            isLoadingThumbnails = true
+            thumbnails = await thumbnailManager.getThumbnails(for: clip)
+            isLoadingThumbnails = false
+        }
+        .onDisappear {
+            // Cancel pending request if row scrolls off screen
+            if thumbnails == nil {
+                Task {
+                    await thumbnailManager.cancelRequest(for: clip.id)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func thumbnailView(image: NSImage?, label: String) -> some View {
+        ZStack {
+            // Background
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.black.opacity(0.1))
+
+            if let image = image {
+                // Thumbnail image
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: thumbnailWidth, height: thumbnailHeight)
+                    .clipped()
+            } else if isLoadingThumbnails {
+                // Loading spinner
+                ProgressView()
+                    .scaleEffect(0.5)
+            } else {
+                // Placeholder
+                Image(systemName: "film")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            // Label overlay (IN/OUT)
+            VStack {
+                Spacer()
+                HStack {
+                    Text(label)
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 3)
+                        .padding(.vertical, 1)
+                        .background(Color.black.opacity(0.6))
+                        .cornerRadius(2)
+                    Spacer()
+                }
+                .padding(2)
+            }
+        }
+        .frame(width: thumbnailWidth, height: thumbnailHeight)
+        .cornerRadius(4)
     }
 
     @ViewBuilder

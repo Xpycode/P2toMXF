@@ -36,10 +36,22 @@ Resources/
 
 ### Build Settings
 - **Sandbox**: DISABLED (required for subprocess execution)
-- **Hardened Runtime**: DISABLED
+- **Hardened Runtime**: ENABLED (required for distribution/notarization)
 - **ENABLE_USER_SCRIPT_SANDBOXING**: NO (required for Run Script build phase)
 - **Development Team**: FDMSRXXN73
 - **Deployment Target**: macOS 14.0
+
+### Entitlements (P2toMXF.entitlements)
+```xml
+com.apple.security.cs.disable-library-validation    <!-- Load bundled dylibs -->
+com.apple.security.cs.allow-unsigned-executable-memory  <!-- FFmpeg codecs -->
+com.apple.security.cs.allow-jit                     <!-- JIT compilation -->
+```
+
+### Bundled Binary Signing
+All bundled executables and dylibs must be signed with Hardened Runtime before distribution.
+Run `./sign-bundled-binaries.sh` to sign with your development certificate.
+For notarization, use: `./sign-bundled-binaries.sh "Developer ID Application: Your Name (TEAMID)"`
 
 ### Build Phases
 - **Run Script** phase copies `lib/` folder to bundle:
@@ -345,3 +357,53 @@ var timecodeIssues: [(clip1: P2Clip, clip2: P2Clip, gapFrames: Int)]
 // Returns non-empty array if gaps/overlaps detected between consecutive clips
 // gap > 0: missing frames, gap < 0: overlapping frames
 ```
+
+---
+
+## Session Log: 2026-01-01 (UI Polish & App Icon)
+
+### UI Improvements
+
+#### Footer Reorganization
+- **Row 1**: Format, Mode, Audio, Preserve TC (inline labels, horizontal)
+- **Row 2**: Output directory + "Use folder name" checkbox + Filename field
+- **Row 3**: Action button (right-aligned)
+
+#### Layout Fixes
+- Minimum window width: 600 → 850 pixels
+- All labels use consistent font size (removed `.font(.caption)`)
+- Added `.fixedSize()` to prevent label text wrapping
+- Filename field expands to fill available space (`maxWidth: .infinity`)
+- "Use folder name" checkbox auto-fills P2 card folder name
+
+#### Header Cleanup
+- Moved "Load P2 Card" button to left side
+- Removed FFmpeg version display (now in About panel)
+- Kept "FFmpeg not found" warning for error feedback
+
+### App Icon & About Panel
+
+#### App Icon Setup
+- Generated all macOS icon sizes from 1024px source (NanoBanana design)
+- Sizes: 16, 32, 64, 128, 256, 512, 1024 pixels
+- Added to `AppIcon.appiconset` with proper Contents.json
+- Created `AboutIcon.imageset` for potential custom About view
+
+#### Credits (About Panel)
+- Created `Credits.rtf` with clickable links:
+  - **FFmpeg** (ffmpeg.org) - LGPL/GPL license
+  - **BMX** (github.com/bbc/bmx) - BSD 3-Clause license
+  - Icon credit to NanoBanana
+- Standard macOS About panel now shows icon + credits
+
+### New Settings
+- `useFolderNameAsFilename: Bool` - Auto-use P2 card folder name
+- `effectiveOutputFilename` computed property in ViewModel
+
+### Files Modified
+- `ContentView.swift` - Footer layout, header cleanup
+- `ConversionViewModel.swift` - Added `effectiveOutputFilename`
+- `Models/P2Clip.swift` - Added `useFolderNameAsFilename` setting
+- `Assets.xcassets/AppIcon.appiconset/` - All icon sizes
+- `Assets.xcassets/AboutIcon.imageset/` - About view icon
+- `Credits.rtf` - About panel credits with links

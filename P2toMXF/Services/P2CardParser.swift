@@ -68,16 +68,20 @@ class P2CardParser {
         let parser = P2XMLParser(data: data)
         let metadata = try parser.parse()
 
+        let fm = FileManager.default
+
         // Build file paths based on P2 naming convention
         let videoPath = contentsPath.appendingPathComponent("VIDEO")
         let audioPath = contentsPath.appendingPathComponent("AUDIO")
+        let proxyPath = contentsPath.appendingPathComponent("PROXY")
+        let iconPath = contentsPath.appendingPathComponent("ICON")
 
         var videoFiles: [URL] = []
         var audioFiles: [URL] = []
 
         // P2 video file: {ClipName}.MXF
         let videoFile = videoPath.appendingPathComponent("\(metadata.clipName).MXF")
-        if FileManager.default.fileExists(atPath: videoFile.path) {
+        if fm.fileExists(atPath: videoFile.path) {
             videoFiles.append(videoFile)
         }
 
@@ -85,10 +89,19 @@ class P2CardParser {
         for i in 0..<metadata.audioChannels {
             let audioFileName = String(format: "%@%02d.MXF", metadata.clipName, i)
             let audioFile = audioPath.appendingPathComponent(audioFileName)
-            if FileManager.default.fileExists(atPath: audioFile.path) {
+            if fm.fileExists(atPath: audioFile.path) {
                 audioFiles.append(audioFile)
             }
         }
+
+        // Thumbnail sources (optional - may not exist on all P2 cards)
+        // PROXY/{ClipName}.MP4 - low-res proxy video for fast thumbnail extraction
+        let proxyFile = proxyPath.appendingPathComponent("\(metadata.clipName).MP4")
+        let proxyURL: URL? = fm.fileExists(atPath: proxyFile.path) ? proxyFile : nil
+
+        // ICON/{ClipName}.BMP - single frame thumbnail (first frame only)
+        let iconFile = iconPath.appendingPathComponent("\(metadata.clipName).BMP")
+        let iconURL: URL? = fm.fileExists(atPath: iconFile.path) ? iconFile : nil
 
         return P2Clip(
             clipName: metadata.clipName,
@@ -100,7 +113,9 @@ class P2CardParser {
             audioChannels: metadata.audioChannels,
             videoFiles: videoFiles,
             audioFiles: audioFiles,
-            metadataFile: url
+            metadataFile: url,
+            proxyFile: proxyURL,
+            iconFile: iconURL
         )
     }
 }

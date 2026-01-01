@@ -6,6 +6,7 @@ class ConversionViewModel: ObservableObject {
     // Services
     private let parser = P2CardParser()
     private let ffmpeg = FFmpegWrapper()
+    let thumbnailManager: ThumbnailManager
 
     // State
     @Published var p2Card: P2Card?
@@ -117,6 +118,7 @@ class ConversionViewModel: ObservableObject {
     }
 
     init() {
+        self.thumbnailManager = ThumbnailManager(ffmpeg: ffmpeg)
         Task {
             ffmpegVersion = await ffmpeg.getVersionInfo()
         }
@@ -127,6 +129,11 @@ class ConversionViewModel: ObservableObject {
     func loadP2Card(from url: URL) {
         isLoading = true
         errorMessage = nil
+
+        // Clear thumbnail cache when loading new card
+        Task {
+            await thumbnailManager.clearCache()
+        }
 
         Task {
             do {

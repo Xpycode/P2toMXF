@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 /// Wrapper for FFmpeg operations, specifically for combining P2 MXF files
 /// Uses BMX for P2 OPAtom -> OP1a rewrapping, then FFmpeg for concatenation
@@ -440,6 +441,57 @@ class FFmpegWrapper {
     func cancelConversion() {
         currentProcess?.terminate()
         currentProcess = nil
+    }
+
+    // MARK: - Frame Extraction for Thumbnails
+
+    /// Extracts a single frame from a video file at the specified timestamp
+    /// - Parameters:
+    ///   - videoURL: Path to the video file (MP4, MXF, etc.)
+    ///   - timestamp: Time in seconds to extract the frame
+    ///   - maxWidth: Maximum width for the output image (maintains aspect ratio)
+    /// - Returns: NSImage if successful, nil otherwise
+    func extractFrame(from videoURL: URL, atSeconds timestamp: Double, maxWidth: Int = 320) async -> NSImage? {
+        guard let ffmpeg = ffmpegPath else { return nil }
+
+        // Use -ss before -i for fast seeking
+        // Output JPEG to stdout via pipe
+        let args = [
+            "-ss", String(format: "%.3f", timestamp),
+            "-i", videoURL.path,
+            "-frames:v", "1",
+            "-vf", "scale=\(maxWidth):-1",  // Scale to maxWidth, maintain aspect ratio
+            "-q:v", "2",                      // Good quality JPEG
+            "-f", "image2pipe",
+            "-vcodec", "mjpeg",
+            "-"                               // Output to stdout
+        ]
+
+        return await withCheckedContinuation { continuation in
+            let process = Process()
+            process.executableURL = ffmpeg
+            process.arguments = args
+
+            let outputPipe = Pipe()
+            let errorPipe = Pipe()
+            process.standardOutput = outputPipe
+            process.standardError = errorPipe
+
+            process.terminationHandler = { _ in
+                let imageData = outputPipe.fileHandleForReading.readDataToEndOfFile()
+                if !imageData.isEmpty, let image = NSImage(data: imageData) {
+                    continuation.resume(returning: image)
+                } else {
+                    continuation.resume(returning: nil)
+                }
+            }
+
+            do {
+                try process.run()
+            } catch {
+                continuation.resume(returning: nil)
+            }
+        }
     }
 
     /// Gets FFmpeg version info for display
