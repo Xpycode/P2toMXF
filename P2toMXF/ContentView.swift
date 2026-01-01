@@ -64,6 +64,14 @@ struct ContentView: View {
                 }
             }
 
+            Button {
+                showConsole.toggle()
+            } label: {
+                Label(showConsole ? "Hide Console" : "Show Console",
+                      systemImage: showConsole ? "terminal.fill" : "terminal")
+            }
+            .help(showConsole ? "Hide console output" : "Show console output")
+
             Spacer()
 
             VStack(alignment: .trailing, spacing: 2) {
