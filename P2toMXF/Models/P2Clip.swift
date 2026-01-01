@@ -61,6 +61,26 @@ struct P2Clip: Identifiable, Hashable, Codable {
         clipName.isEmpty ? globalClipID : clipName
     }
 
+    /// Total file size of all source files (video + audio) in bytes
+    var totalFileSize: Int64 {
+        let fm = FileManager.default
+        var total: Int64 = 0
+
+        for file in videoFiles {
+            if let attrs = try? fm.attributesOfItem(atPath: file.path),
+               let size = attrs[.size] as? Int64 {
+                total += size
+            }
+        }
+        for file in audioFiles {
+            if let attrs = try? fm.attributesOfItem(atPath: file.path),
+               let size = attrs[.size] as? Int64 {
+                total += size
+            }
+        }
+        return total
+    }
+
     /// Frame rate as Double for calculations
     var frameRateDouble: Double {
         Double(frameRate) ?? 25.0
@@ -460,6 +480,134 @@ struct VerificationResult: Codable {
             return "✗ Failed: \(errorMessage ?? "Unknown error")"
         }
     }
+}
+
+// MARK: - Time Estimation Models
+
+/// Estimated time for a conversion job
+struct ConversionEstimate {
+    let totalBytes: Int64
+    let totalDurationSeconds: Double
+    let clipCount: Int
+    let estimatedSeconds: TimeInterval
+    let speedMultiplier: Double       // e.g., 30.0 means 30x realtime
+    let confidence: EstimateConfidence
+
+    /// Formatted total size (e.g., "42.3 GB")
+    var formattedSize: String {
+        ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file)
+    }
+
+    /// Formatted duration of source content (e.g., "1:23:45")
+    var formattedSourceDuration: String {
+        formatTimeInterval(totalDurationSeconds)
+    }
+
+    /// Formatted estimated time (e.g., "~3 min")
+    var formattedEstimate: String {
+        if estimatedSeconds < 60 {
+            return "< 1 min"
+        } else if estimatedSeconds < 3600 {
+            let mins = Int(estimatedSeconds / 60)
+            return "~\(mins) min"
+        } else {
+            let hours = Int(estimatedSeconds / 3600)
+            let mins = Int((estimatedSeconds.truncatingRemainder(dividingBy: 3600)) / 60)
+            return "~\(hours)h \(mins)m"
+        }
+    }
+
+    /// Formatted speed (e.g., "30x realtime")
+    var formattedSpeed: String {
+        String(format: "%.0fx realtime", speedMultiplier)
+    }
+
+    private func formatTimeInterval(_ interval: TimeInterval) -> String {
+        let hours = Int(interval) / 3600
+        let minutes = (Int(interval) % 3600) / 60
+        let seconds = Int(interval) % 60
+
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            return String(format: "%d:%02d", minutes, seconds)
+        }
+    }
+}
+
+/// Confidence level in the time estimate
+enum EstimateConfidence: String {
+    case high = "Based on recent conversions"
+    case medium = "Based on historical average"
+    case low = "Using default estimate"
+
+    var icon: String {
+        switch self {
+        case .high: return "checkmark.circle.fill"
+        case .medium: return "circle.fill"
+        case .low: return "questionmark.circle"
+        }
+    }
+}
+
+/// Record of a completed conversion for speed tracking
+struct ConversionSpeedRecord: Codable {
+    let date: Date
+    let bytesProcessed: Int64
+    let durationSeconds: TimeInterval
+    let speedMultiplier: Double        // Realtime multiplier (e.g., 30.0 for 30x)
+    let processingMode: ConversionSettings.ProcessingMode
+    let outputFormat: ConversionSettings.OutputContainer
+
+    /// Throughput in bytes per second
+    var bytesPerSecond: Double {
+        guard durationSeconds > 0 else { return 0 }
+        return Double(bytesProcessed) / durationSeconds
+    }
+}
+
+/// Slow speed warning threshold and data
+struct SlowSpeedWarning {
+    let currentSpeed: Double          // Current realtime multiplier
+    let expectedSpeed: Double         // Expected based on history
+    let estimatedRemaining: TimeInterval
+    let reason: SlowSpeedReason
+
+    var message: String {
+        switch reason {
+        case .slowDisk:
+            return "Slow disk speed detected"
+        case .externalDrive:
+            return "External drive may be slow"
+        case .networkStorage:
+            return "Network storage latency"
+        case .systemLoad:
+            return "High system activity"
+        case .unknown:
+            return "Slower than expected"
+        }
+    }
+
+    var formattedRemaining: String {
+        if estimatedRemaining < 60 {
+            return "< 1 min remaining"
+        } else if estimatedRemaining < 3600 {
+            let mins = Int(estimatedRemaining / 60)
+            return "~\(mins) min remaining"
+        } else {
+            let hours = Int(estimatedRemaining / 3600)
+            let mins = Int((estimatedRemaining.truncatingRemainder(dividingBy: 3600)) / 60)
+            return "~\(hours)h \(mins)m remaining"
+        }
+    }
+}
+
+enum SlowSpeedReason {
+    case slowDisk
+    case externalDrive
+    case networkStorage
+    case systemLoad
+    case unknown
 }
 
 // MARK: - Batch Queue Models

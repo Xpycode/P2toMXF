@@ -17,11 +17,14 @@ class QueueManager: ObservableObject {
     // MARK: - Private
     private let ffmpeg = FFmpegWrapper()
     private let verificationService = VerificationService()
+    private let speedTracker = SpeedTracker.shared
     private var currentJobId: UUID?
     private var currentVerificationJobId: UUID?
     private var sleepAssertionID: IOPMAssertionID = 0
     private var isSleepPrevented = false
     @Published private(set) var isVerifying = false
+    @Published private(set) var slowSpeedWarning: SlowSpeedWarning?
+    @Published private(set) var currentJobEstimate: ConversionEstimate?
 
     // MARK: - Persistence
     private static let queueFileName = "queue.json"
@@ -332,6 +335,60 @@ class QueueManager: ObservableObject {
         }
     }
 
+    // MARK: - Time Estimation
+
+    /// Gets an estimate for a potential conversion
+    func getEstimate(
+        clips: [P2Clip],
+        processingMode: ConversionSettings.ProcessingMode,
+        outputFormat: ConversionSettings.OutputContainer
+    ) -> ConversionEstimate {
+        return speedTracker.estimateConversion(
+            clips: clips,
+            processingMode: processingMode,
+            outputFormat: outputFormat
+        )
+    }
+
+    /// Gets an estimate for a job
+    func getEstimate(for job: ConversionJob) -> ConversionEstimate {
+        return speedTracker.estimateJob(job)
+    }
+
+    /// Gets total estimate for all pending jobs
+    func getTotalQueueEstimate() -> ConversionEstimate? {
+        let pendingJobs = jobs.filter { $0.status == .pending }
+        guard !pendingJobs.isEmpty else { return nil }
+
+        var totalBytes: Int64 = 0
+        var totalDuration: Double = 0
+        var totalClips = 0
+
+        for job in pendingJobs {
+            totalBytes += job.clips.reduce(Int64(0)) { $0 + $1.totalFileSize }
+            let fps = job.clips.first?.frameRateDouble ?? 25.0
+            totalDuration += Double(job.totalDurationFrames) / fps
+            totalClips += job.clips.count
+        }
+
+        // Use first job's settings for speed estimate
+        guard let firstJob = pendingJobs.first else { return nil }
+
+        let estimate = speedTracker.estimateConversion(
+            clips: pendingJobs.flatMap(\.clips),
+            processingMode: firstJob.settings.processingMode,
+            outputFormat: firstJob.settings.outputContainer
+        )
+
+        return estimate
+    }
+
+    /// Dismisses the slow speed warning
+    func dismissSlowSpeedWarning() {
+        slowSpeedWarning = nil
+        speedTracker.clearSpeedWarning()
+    }
+
     // MARK: - Queue Processing
 
     /// Main loop that processes jobs sequentially
@@ -362,10 +419,16 @@ class QueueManager: ObservableObject {
         jobs[index].progress = 0
         jobs[index].startedAt = Date()
 
+        // Calculate and store estimate
+        currentJobEstimate = speedTracker.estimateJob(job)
+
         log("--- Starting job: \(job.displayName) ---")
         log("Card: \(job.cardName)")
         log("Clips: \(job.clips.count)")
         log("Output: \(job.destinationURL.path)")
+        if let estimate = currentJobEstimate {
+            log("Estimated time: \(estimate.formattedEstimate) (\(estimate.formattedSpeed))")
+        }
 
         // Start security-scoped access to the card
         let accessGranted = job.cardPath.startAccessingSecurityScopedResource()
@@ -374,6 +437,11 @@ class QueueManager: ObservableObject {
                 job.cardPath.stopAccessingSecurityScopedResource()
             }
         }
+
+        let startTime = Date()
+        let totalBytes = job.clips.reduce(Int64(0)) { $0 + $1.totalFileSize }
+        let fps = job.clips.first?.frameRateDouble ?? 25.0
+        let contentDuration = Double(job.totalDurationFrames) / fps
 
         do {
             jobs[index].status = .active
@@ -387,7 +455,23 @@ class QueueManager: ObservableObject {
 
             jobs[index].status = .completed
             jobs[index].progress = 1.0
-            log("SUCCESS: \(job.displayName)")
+
+            // Record the conversion speed for future estimates
+            let elapsed = Date().timeIntervalSince(startTime)
+            if elapsed > 0 {
+                speedTracker.recordConversion(
+                    bytesProcessed: totalBytes,
+                    durationSeconds: elapsed,
+                    contentDurationSeconds: contentDuration,
+                    processingMode: job.settings.processingMode,
+                    outputFormat: job.settings.outputContainer
+                )
+
+                let speedMultiplier = contentDuration / elapsed
+                log("SUCCESS: \(job.displayName) - \(String(format: "%.1fx", speedMultiplier)) realtime")
+            } else {
+                log("SUCCESS: \(job.displayName)")
+            }
 
         } catch {
             // Check if cancelled vs actual error
@@ -399,7 +483,10 @@ class QueueManager: ObservableObject {
             }
         }
 
+        // Clear job-specific state
         currentJobId = nil
+        currentJobEstimate = nil
+        slowSpeedWarning = nil
     }
 
     /// Processes a concatenation job (multiple clips -> single file)

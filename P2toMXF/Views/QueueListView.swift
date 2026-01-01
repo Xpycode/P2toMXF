@@ -14,6 +14,15 @@ struct QueueListView: View {
             if isExpanded {
                 Divider()
 
+                // Slow speed warning banner
+                if let warning = queueManager.slowSpeedWarning {
+                    SlowSpeedBanner(warning: warning) {
+                        queueManager.dismissSlowSpeedWarning()
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                }
+
                 if queueManager.jobs.isEmpty {
                     emptyState
                 } else {
@@ -69,9 +78,15 @@ struct QueueListView: View {
                     ProgressView()
                         .scaleEffect(0.5)
                         .frame(width: 16, height: 16)
-                    Text("Processing...")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    if let estimate = queueManager.currentJobEstimate {
+                        Text(estimate.formattedEstimate)
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("Processing...")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             } else if queueManager.isVerifying {
                 HStack(spacing: 4) {
@@ -82,6 +97,15 @@ struct QueueListView: View {
                         .font(.caption)
                         .foregroundStyle(.orange)
                 }
+            } else if queueManager.pendingCount > 0, let totalEstimate = queueManager.getTotalQueueEstimate() {
+                HStack(spacing: 4) {
+                    Image(systemName: "clock")
+                        .font(.caption2)
+                    Text(totalEstimate.formattedEstimate)
+                        .font(.caption.monospacedDigit())
+                }
+                .foregroundStyle(.secondary)
+                .help("Total estimated time for \(queueManager.pendingCount) pending job(s)")
             } else if !queueManager.jobs.isEmpty {
                 Text("\(queueManager.completedCount)/\(queueManager.jobs.count) done")
                     .font(.caption)
@@ -298,15 +322,20 @@ struct JobRowView: View {
     private var trailingContent: some View {
         switch job.status {
         case .pending:
-            Button {
-                queueManager.removeJob(job.id)
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                // Show estimate
+                QueueEstimateBadge(estimate: queueManager.getEstimate(for: job))
+
+                Button {
+                    queueManager.removeJob(job.id)
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Remove from queue")
             }
-            .buttonStyle(.plain)
-            .help("Remove from queue")
 
         case .preparing, .active:
             VStack(alignment: .trailing, spacing: 2) {

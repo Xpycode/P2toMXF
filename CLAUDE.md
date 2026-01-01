@@ -658,3 +658,104 @@ func cancelVerification()
 - `Models/P2Clip.swift` - Added `VerificationStatus`, `VerificationResult`, `VerificationMode`
 - `Services/QueueManager.swift` - Verification integration, `isVerifying` state
 - `Views/QueueListView.swift` - Verification UI controls and status display
+
+---
+
+## Session Log: 2026-01-01 (Time Estimation & Speed Tracking)
+
+### Overview
+Added conversion time estimation based on historical speed data, with slow speed warnings during conversion.
+
+### Features
+
+#### Time Estimation
+- **Pre-conversion estimates**: Shows expected time before starting
+- **Historical tracking**: Records conversion speeds for accurate predictions
+- **Confidence levels**: High (recent data), Medium (historical), Low (defaults)
+- **Queue totals**: Shows total estimated time for all pending jobs
+
+#### Speed Tracking
+- Persists last 50 conversion records to `~/Library/Application Support/P2toMXF/speed_records.json`
+- Tracks: bytes processed, duration, realtime multiplier, format, mode
+- Filters by matching settings for relevant estimates
+
+#### Slow Speed Warning
+- Detects when speed drops below 30% of expected
+- Shows banner with current vs expected speed
+- Estimates remaining time at current rate
+- Attempts to diagnose reason (network storage, external drive, etc.)
+
+### New Data Structures
+
+#### ConversionEstimate (P2Clip.swift)
+```swift
+struct ConversionEstimate {
+    let totalBytes: Int64
+    let totalDurationSeconds: Double
+    let clipCount: Int
+    let estimatedSeconds: TimeInterval
+    let speedMultiplier: Double       // e.g., 30.0 means 30x realtime
+    let confidence: EstimateConfidence
+}
+```
+
+#### ConversionSpeedRecord (P2Clip.swift)
+```swift
+struct ConversionSpeedRecord: Codable {
+    let date: Date
+    let bytesProcessed: Int64
+    let durationSeconds: TimeInterval
+    let speedMultiplier: Double
+    let processingMode: ProcessingMode
+    let outputFormat: OutputContainer
+}
+```
+
+#### SlowSpeedWarning (P2Clip.swift)
+```swift
+struct SlowSpeedWarning {
+    let currentSpeed: Double
+    let expectedSpeed: Double
+    let estimatedRemaining: TimeInterval
+    let reason: SlowSpeedReason  // slowDisk, externalDrive, networkStorage, etc.
+}
+```
+
+### SpeedTracker Service (Services/SpeedTracker.swift)
+- **Singleton**: `SpeedTracker.shared`
+- **recordConversion()**: Saves speed data after each job
+- **estimateConversion()**: Predicts time based on history
+- **checkSpeed()**: Detects slow speeds during conversion
+
+### UI Components (Views/EstimateSheet.swift)
+
+#### EstimateSheet
+Pre-conversion dialog showing:
+- Source info (clips, size, duration)
+- Estimated time with speed multiplier
+- Confidence indicator
+- Start/Cancel buttons
+
+#### SlowSpeedBanner
+In-conversion warning showing:
+- Current vs expected speed
+- Remaining time estimate
+- Dismiss button
+
+#### QueueEstimateBadge
+Compact estimate display for pending jobs in queue list
+
+### Queue Integration
+- Pending jobs show estimate badge
+- Queue header shows total estimated time
+- Processing jobs show current estimate
+- Slow speed banner appears in queue panel
+
+### Files Created
+- `Services/SpeedTracker.swift` - Speed tracking and estimation
+- `Views/EstimateSheet.swift` - Estimate dialog and warning views
+
+### Files Modified
+- `Models/P2Clip.swift` - Added estimation models, `totalFileSize` computed property
+- `Services/QueueManager.swift` - Integration with SpeedTracker, estimate methods
+- `Views/QueueListView.swift` - Estimate badges, slow speed banner, header estimates
