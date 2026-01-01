@@ -48,6 +48,7 @@ struct ContentView: View {
 
     private var headerView: some View {
         HStack {
+            // Left: Load P2 Card button
             Button {
                 showingP2Picker = true
             } label: {
@@ -64,17 +65,10 @@ struct ContentView: View {
                 }
             }
 
-            Button {
-                showConsole.toggle()
-            } label: {
-                Label(showConsole ? "Hide Console" : "Show Console",
-                      systemImage: showConsole ? "terminal.fill" : "terminal")
-            }
-            .help(showConsole ? "Hide console output" : "Show console output")
-
             Spacer()
 
-            VStack(alignment: .trailing, spacing: 2) {
+            // Center: App name and warnings
+            VStack(spacing: 2) {
                 Text("P2 to MXF Converter")
                     .font(.headline)
 
@@ -84,6 +78,17 @@ struct ContentView: View {
                         .foregroundStyle(.orange)
                 }
             }
+
+            Spacer()
+
+            // Right: Console toggle
+            Button {
+                showConsole.toggle()
+            } label: {
+                Label(showConsole ? "Hide Console" : "Show Console",
+                      systemImage: showConsole ? "terminal.fill" : "terminal")
+            }
+            .help(showConsole ? "Hide console output" : "Show console output")
         }
     }
 
