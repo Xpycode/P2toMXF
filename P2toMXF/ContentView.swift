@@ -70,11 +70,7 @@ struct ContentView: View {
                 Text("P2 to MXF Converter")
                     .font(.headline)
 
-                if let version = viewModel.ffmpegVersion {
-                    Text(version)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else if !viewModel.hasFFmpeg {
+                if !viewModel.hasFFmpeg {
                     Label("FFmpeg not found", systemImage: "exclamationmark.triangle")
                         .font(.caption)
                         .foregroundStyle(.orange)
