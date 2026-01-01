@@ -71,6 +71,35 @@ struct P2Card: Identifiable {
     }
 }
 
+/// A group of timecode-continuous clips representing a single recording session
+struct RecordGroup: Identifiable {
+    let id = UUID()
+    let clips: [P2Clip]
+    let groupIndex: Int  // 1-based for display
+
+    /// Start timecode of the first clip in the group
+    var startTimecode: String {
+        clips.first?.startTimecode ?? ""
+    }
+
+    /// Total duration in frames across all clips
+    var totalDurationFrames: Int {
+        clips.reduce(0) { $0 + $1.durationFrames }
+    }
+
+    /// Duration formatted as HH:MM:SS:FF timecode
+    var formattedDuration: String {
+        guard let fps = clips.first?.frameRateDouble, fps > 0 else { return "--:--:--:--" }
+        let tc = Timecode.from(frames: totalDurationFrames, frameRate: fps)
+        return tc.description
+    }
+
+    /// Number of clips in this group
+    var clipCount: Int {
+        clips.count
+    }
+}
+
 /// Conversion settings for the MXF output
 struct ConversionSettings {
     var outputDirectory: URL?

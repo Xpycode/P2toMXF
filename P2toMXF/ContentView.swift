@@ -160,7 +160,7 @@ struct ContentView: View {
 
                 Spacer()
 
-                Text("\(card.clipCount) clips")
+                Text("\(card.clipCount) clips in \(viewModel.recordGroups.count) group(s)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -179,17 +179,30 @@ struct ContentView: View {
             .padding(.vertical, 8)
             .background(Color.secondary.opacity(0.1))
 
-            // Clips table
-            List(card.clips, selection: $viewModel.selectedClips) { clip in
-                ClipRowView(
-                    clip: clip,
-                    isSelected: viewModel.selectedClips.contains(clip.id),
-                    status: viewModel.conversionStatus[clip.id],
-                    thumbnailManager: viewModel.thumbnailManager
-                )
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    viewModel.toggleClipSelection(clip)
+            // Grouped clips list
+            List {
+                ForEach(viewModel.recordGroups) { group in
+                    Section {
+                        ForEach(group.clips) { clip in
+                            ClipRowView(
+                                clip: clip,
+                                isSelected: viewModel.selectedClips.contains(clip.id),
+                                status: viewModel.conversionStatus[clip.id],
+                                thumbnailManager: viewModel.thumbnailManager
+                            )
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                viewModel.toggleClipSelection(clip)
+                            }
+                        }
+                    } header: {
+                        GroupHeaderView(
+                            group: group,
+                            isFullySelected: viewModel.isGroupFullySelected(group),
+                            isPartiallySelected: viewModel.isGroupPartiallySelected(group),
+                            onToggle: { viewModel.toggleGroupSelection(group) }
+                        )
+                    }
                 }
             }
             .listStyle(.inset)
@@ -321,16 +334,28 @@ struct ContentView: View {
                 }
             }
 
-            // TC Warning (only in concatenate mode with issues)
-            if viewModel.settings.processingMode == .concatenate,
-               let warning = viewModel.tcWarningMessage {
-                HStack {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                    Text(warning)
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                    Spacer()
+            // Group selection hint (only in concatenate mode with partial selections)
+            if viewModel.settings.processingMode == .concatenate {
+                let fullCount = viewModel.fullySelectedGroups.count
+                let totalCount = viewModel.recordGroups.count
+                if fullCount < totalCount && fullCount > 0 {
+                    HStack {
+                        Image(systemName: "info.circle")
+                            .foregroundStyle(.blue)
+                        Text("\(fullCount) of \(totalCount) groups fully selected — only fully selected groups will be merged")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                } else if fullCount == 0 && viewModel.selectedClipCount > 0 {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Text("No groups fully selected — select all clips in at least one group to merge")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                        Spacer()
+                    }
                 }
             }
 
@@ -364,12 +389,13 @@ struct ContentView: View {
     // MARK: - Helpers
 
     private var convertButtonLabel: String {
-        let count = viewModel.selectedClipCount
         switch viewModel.settings.processingMode {
         case .concatenate:
-            return "Merge \(count) Clips"
+            let groupCount = viewModel.fullySelectedGroups.count
+            return groupCount == 1 ? "Merge 1 Group" : "Merge \(groupCount) Groups"
         case .individual:
-            return "Convert \(count) Clips"
+            let clipCount = viewModel.selectedClipCount
+            return clipCount == 1 ? "Convert 1 Clip" : "Convert \(clipCount) Clips"
         }
     }
 
@@ -379,6 +405,63 @@ struct ContentView: View {
             return "arrow.triangle.merge"
         case .individual:
             return "square.and.arrow.down.on.square"
+        }
+    }
+}
+
+// MARK: - Group Header View
+
+struct GroupHeaderView: View {
+    let group: RecordGroup
+    let isFullySelected: Bool
+    let isPartiallySelected: Bool
+    let onToggle: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            // Selection checkbox (with mixed state support)
+            Button(action: onToggle) {
+                Image(systemName: checkboxIcon)
+                    .foregroundStyle(isFullySelected ? .blue : .secondary)
+            }
+            .buttonStyle(.plain)
+
+            // Group info
+            Text("Group \(group.groupIndex)")
+                .font(.subheadline.bold())
+
+            Text("(\(group.clipCount) clips)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Text("•")
+                .foregroundStyle(.tertiary)
+
+            Text(group.formattedDuration)
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+
+            Text("•")
+                .foregroundStyle(.tertiary)
+
+            Text("TC: \(group.startTimecode)")
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+
+            Spacer()
+        }
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onToggle)
+    }
+
+    private var checkboxIcon: String {
+        if isFullySelected {
+            return "checkmark.circle.fill"
+        } else if isPartiallySelected {
+            return "minus.circle.fill"
+        } else {
+            return "circle"
         }
     }
 }

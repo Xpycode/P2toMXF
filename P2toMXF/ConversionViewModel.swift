@@ -58,6 +58,89 @@ class ConversionViewModel: ObservableObject {
             .sorted { $0.startTimecode < $1.startTimecode }
     }
 
+    /// All clips sorted by timecode (for grouping)
+    var sortedAllClips: [P2Clip] {
+        guard let card = p2Card else { return [] }
+        return card.clips.sorted { $0.startTimecode < $1.startTimecode }
+    }
+
+    // MARK: - Record Groups
+
+    /// Clips segmented into timecode-continuous groups
+    var recordGroups: [RecordGroup] {
+        let clips = sortedAllClips
+        guard !clips.isEmpty else { return [] }
+
+        var groups: [[P2Clip]] = [[clips[0]]]
+
+        for i in 1..<clips.count {
+            let prev = clips[i - 1]
+            let curr = clips[i]
+
+            if areContinuous(prev, curr) {
+                groups[groups.count - 1].append(curr)
+            } else {
+                groups.append([curr])
+            }
+        }
+
+        return groups.enumerated().map { index, clips in
+            RecordGroup(clips: clips, groupIndex: index + 1)
+        }
+    }
+
+    /// Check if two consecutive clips are timecode-continuous
+    private func areContinuous(_ clip1: P2Clip, _ clip2: P2Clip) -> Bool {
+        guard let frameRate = Double(clip1.frameRate), frameRate > 0,
+              let duration1 = Int(clip1.duration),
+              let tc1 = Timecode(string: clip1.startTimecode, frameRate: frameRate),
+              let tc2 = Timecode(string: clip2.startTimecode, frameRate: frameRate) else {
+            return false
+        }
+
+        let gap = Timecode.frameGap(from: tc1, duration1Frames: duration1, to: tc2)
+        return gap == 0
+    }
+
+    /// Groups where ALL clips are selected
+    var fullySelectedGroups: [RecordGroup] {
+        recordGroups.filter { isGroupFullySelected($0) }
+    }
+
+    /// Check if all clips in a group are selected
+    func isGroupFullySelected(_ group: RecordGroup) -> Bool {
+        group.clips.allSatisfy { selectedClips.contains($0.id) }
+    }
+
+    /// Check if some (but not all) clips in a group are selected
+    func isGroupPartiallySelected(_ group: RecordGroup) -> Bool {
+        let selectedCount = group.clips.filter { selectedClips.contains($0.id) }.count
+        return selectedCount > 0 && selectedCount < group.clips.count
+    }
+
+    /// Select all clips in a group
+    func selectGroup(_ group: RecordGroup) {
+        for clip in group.clips {
+            selectedClips.insert(clip.id)
+        }
+    }
+
+    /// Deselect all clips in a group
+    func deselectGroup(_ group: RecordGroup) {
+        for clip in group.clips {
+            selectedClips.remove(clip.id)
+        }
+    }
+
+    /// Toggle selection of all clips in a group
+    func toggleGroupSelection(_ group: RecordGroup) {
+        if isGroupFullySelected(group) {
+            deselectGroup(group)
+        } else {
+            selectGroup(group)
+        }
+    }
+
     /// Check for timecode continuity issues between consecutive clips
     var timecodeIssues: [(clip1: P2Clip, clip2: P2Clip, gapFrames: Int)] {
         let clips = sortedSelectedClips
@@ -105,15 +188,15 @@ class ConversionViewModel: ObservableObject {
 
     /// Whether conversion can proceed based on current settings
     var canConvert: Bool {
-        guard selectedClipCount > 0,
-              settings.outputDirectory != nil,
-              hasFFmpeg else { return false }
+        guard settings.outputDirectory != nil, hasFFmpeg else { return false }
 
         switch settings.processingMode {
         case .concatenate:
-            return !effectiveOutputFilename.isEmpty && timecodeIssues.isEmpty
+            // Valid when: filename provided AND at least one group fully selected
+            return !effectiveOutputFilename.isEmpty && !fullySelectedGroups.isEmpty
         case .individual:
-            return true
+            // Valid when any clips selected
+            return selectedClipCount > 0
         }
     }
 
@@ -194,51 +277,71 @@ class ConversionViewModel: ObservableObject {
     }
 
     private func startConcatenateConversion(clips: [P2Clip], outputDir: URL, ext: String) {
-        let outputName = "\(effectiveOutputFilename).\(ext)"
-        let outputURL = outputDir.appendingPathComponent(outputName)
+        let groups = fullySelectedGroups
+        let groupCount = groups.count
 
-        log("Starting merge of \(clips.count) clips into single \(ext.uppercased())")
+        log("Starting merge of \(groupCount) group(s) to \(ext.uppercased())")
         log("Output directory: \(outputDir.path)")
         log("FFmpeg path: \(ffmpeg.ffmpegPath?.path ?? "NOT FOUND")")
 
-        // Mark all clips as in progress
-        for clip in clips {
-            conversionStatus[clip.id] = .inProgress(progress: 0)
-        }
-
-        log("Output file: \(outputName)")
-        log("Clips in order:")
-        for (i, clip) in clips.enumerated() {
-            log("  \(i + 1). \(clip.displayName) [TC: \(clip.startTimecode)]")
+        // Mark all clips in selected groups as pending
+        for group in groups {
+            for clip in group.clips {
+                conversionStatus[clip.id] = .pending
+            }
         }
 
         Task {
-            do {
-                try await ffmpeg.mergeClips(clips, to: outputURL, settings: settings) { progress, message in
-                    Task { @MainActor in
-                        for clip in clips {
-                            self.conversionStatus[clip.id] = .inProgress(progress: progress)
+            var successCount = 0
+            var failCount = 0
+
+            for (groupIdx, group) in groups.enumerated() {
+                // Build output filename with numeric suffix if multiple groups
+                let suffix = groupCount > 1 ? String(format: "_%02d", groupIdx + 1) : ""
+                let outputName = "\(effectiveOutputFilename)\(suffix).\(ext)"
+                let outputURL = outputDir.appendingPathComponent(outputName)
+
+                log("--- Group \(group.groupIndex) (\(group.clipCount) clips) ---")
+                log("Output: \(outputName)")
+                log("Clips:")
+                for (i, clip) in group.clips.enumerated() {
+                    log("  \(i + 1). \(clip.displayName) [TC: \(clip.startTimecode)]")
+                }
+
+                // Mark clips in this group as in progress
+                for clip in group.clips {
+                    conversionStatus[clip.id] = .inProgress(progress: 0)
+                }
+
+                do {
+                    try await ffmpeg.mergeClips(group.clips, to: outputURL, settings: settings) { progress, _ in
+                        Task { @MainActor in
+                            for clip in group.clips {
+                                self.conversionStatus[clip.id] = .inProgress(progress: progress)
+                            }
+                        }
+                    } logHandler: { message in
+                        Task { @MainActor in
+                            self.log(message)
                         }
                     }
-                } logHandler: { message in
-                    Task { @MainActor in
-                        self.log(message)
+
+                    for clip in group.clips {
+                        conversionStatus[clip.id] = .completed
                     }
-                }
+                    log("SUCCESS: Created \(outputName)")
+                    successCount += 1
 
-                for clip in clips {
-                    conversionStatus[clip.id] = .completed
+                } catch {
+                    for clip in group.clips {
+                        conversionStatus[clip.id] = .failed(error: error.localizedDescription)
+                    }
+                    log("FAILED: \(error.localizedDescription)")
+                    failCount += 1
                 }
-                log("SUCCESS: Created \(outputName)")
-
-            } catch {
-                for clip in clips {
-                    conversionStatus[clip.id] = .failed(error: error.localizedDescription)
-                }
-                log("FAILED: \(error.localizedDescription)")
             }
 
-            log("Merge complete")
+            log("Merge complete: \(successCount) group(s) succeeded, \(failCount) failed")
             isConverting = false
         }
     }
