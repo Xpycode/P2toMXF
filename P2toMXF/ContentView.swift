@@ -208,7 +208,6 @@ struct ContentView: View {
                 // Format picker
                 HStack(spacing: 8) {
                     Text("Format")
-                        .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize()
                     Picker("", selection: $viewModel.settings.outputContainer) {
@@ -223,7 +222,6 @@ struct ContentView: View {
                 // Mode picker
                 HStack(spacing: 8) {
                     Text("Mode")
-                        .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize()
                     Picker("", selection: $viewModel.settings.processingMode) {
@@ -238,7 +236,6 @@ struct ContentView: View {
                 // Audio picker
                 HStack(spacing: 8) {
                     Text("Audio")
-                        .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize()
                     Picker("", selection: $viewModel.settings.audioMapping) {
@@ -259,12 +256,11 @@ struct ContentView: View {
 
             Divider()
 
-            // Row 2: Output Directory, Output Filename (in concatenate mode)
-            HStack(spacing: 20) {
+            // Row 2: Output Directory, Use folder name checkbox, Filename
+            HStack(spacing: 16) {
                 // Output directory
                 HStack(spacing: 8) {
                     Text("Output")
-                        .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize()
 
@@ -272,7 +268,7 @@ struct ContentView: View {
                         Text(outputDir.lastPathComponent)
                             .lineLimit(1)
                             .truncationMode(.middle)
-                            .frame(maxWidth: 200, alignment: .leading)
+                            .frame(maxWidth: 150, alignment: .leading)
                     } else {
                         Text("Not selected")
                             .foregroundStyle(.secondary)
@@ -296,15 +292,22 @@ struct ContentView: View {
 
                 // Output filename (only in concatenate mode)
                 if viewModel.settings.processingMode == .concatenate {
+                    // Checkbox first
+                    Toggle("Use folder name", isOn: $viewModel.settings.useFolderNameAsFilename)
+                        .toggleStyle(.checkbox)
+                        .fixedSize()
+
+                    // Filename field (expands to fill space)
                     HStack(spacing: 8) {
                         Text("Filename")
-                            .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize()
 
                         if viewModel.settings.useFolderNameAsFilename {
                             Text(viewModel.p2Card?.name ?? "No card loaded")
-                                .frame(width: 180, alignment: .leading)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 4)
                                 .background(Color.secondary.opacity(0.1))
@@ -312,20 +315,13 @@ struct ContentView: View {
                         } else {
                             TextField("Enter filename", text: $viewModel.settings.outputFilename)
                                 .textFieldStyle(.roundedBorder)
-                                .frame(width: 180)
                         }
 
                         Text(".\(viewModel.settings.outputContainer.fileExtension)")
                             .foregroundStyle(.secondary)
                             .fixedSize()
-
-                        Toggle("Use folder name", isOn: $viewModel.settings.useFolderNameAsFilename)
-                            .toggleStyle(.checkbox)
-                            .fixedSize()
                     }
                 }
-
-                Spacer()
             }
 
             // TC Warning (only in concatenate mode with issues)

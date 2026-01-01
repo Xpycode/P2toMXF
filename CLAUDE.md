@@ -228,6 +228,10 @@ codesign --force --sign - bmxtranswrap mxf2raw lib/*.dylib
 3. **XML metadata copy**: Option to copy P2 XML alongside output
 4. ~~**Per-clip export**: For NLE workflows needing original timecodes~~ ✓ Done (Individual mode)
 5. **Progress parsing**: Parse BMX output for better progress reporting
+6. **Large binary handling**: Consider download script instead of storing ffmpeg (59MB) in repo
+   - Option A: `download-deps.sh` script fetching from https://evermeet.cx/ffmpeg/
+   - Option B: Xcode build phase that downloads if missing
+   - Option C: Git LFS for large file storage
 
 ---
 
