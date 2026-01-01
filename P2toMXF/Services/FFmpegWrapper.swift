@@ -437,10 +437,11 @@ class FFmpegWrapper {
         }
     }
 
-    /// Cancels any running conversion
+    /// Cancels any running conversion (both FFmpeg and BMX processes)
     func cancelConversion() {
         currentProcess?.terminate()
         currentProcess = nil
+        bmxWrapper.cancel()
     }
 
     // MARK: - Frame Extraction for Thumbnails

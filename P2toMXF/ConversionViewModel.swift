@@ -16,6 +16,7 @@ class ConversionViewModel: ObservableObject {
 
     @Published var isLoading = false
     @Published var isConverting = false
+    @Published var isCancelled = false
     @Published var errorMessage: String?
     @Published var ffmpegVersion: String?
     @Published var consoleLog: String = ""
@@ -265,6 +266,7 @@ class ConversionViewModel: ObservableObject {
             return
         }
 
+        isCancelled = false
         isConverting = true
         let ext = settings.outputContainer.fileExtension
 
@@ -296,6 +298,12 @@ class ConversionViewModel: ObservableObject {
             var failCount = 0
 
             for (groupIdx, group) in groups.enumerated() {
+                // Check for cancellation before starting each group
+                if isCancelled {
+                    log("Cancellation requested, stopping...")
+                    break
+                }
+
                 // Build output filename with numeric suffix if multiple groups
                 let suffix = groupCount > 1 ? String(format: "_%02d", groupIdx + 1) : ""
                 let outputName = "\(effectiveOutputFilename)\(suffix).\(ext)"
@@ -326,22 +334,40 @@ class ConversionViewModel: ObservableObject {
                         }
                     }
 
-                    for clip in group.clips {
-                        conversionStatus[clip.id] = .completed
+                    // Check if cancelled during conversion
+                    if isCancelled {
+                        for clip in group.clips {
+                            conversionStatus[clip.id] = .pending
+                        }
+                    } else {
+                        for clip in group.clips {
+                            conversionStatus[clip.id] = .completed
+                        }
+                        log("SUCCESS: Created \(outputName)")
+                        successCount += 1
                     }
-                    log("SUCCESS: Created \(outputName)")
-                    successCount += 1
 
                 } catch {
-                    for clip in group.clips {
-                        conversionStatus[clip.id] = .failed(error: error.localizedDescription)
+                    // Don't show error if cancelled
+                    if !isCancelled {
+                        for clip in group.clips {
+                            conversionStatus[clip.id] = .failed(error: error.localizedDescription)
+                        }
+                        log("FAILED: \(error.localizedDescription)")
+                        failCount += 1
+                    } else {
+                        for clip in group.clips {
+                            conversionStatus[clip.id] = .pending
+                        }
                     }
-                    log("FAILED: \(error.localizedDescription)")
-                    failCount += 1
                 }
             }
 
-            log("Merge complete: \(successCount) group(s) succeeded, \(failCount) failed")
+            if isCancelled {
+                log("Conversion cancelled")
+            } else {
+                log("Merge complete: \(successCount) group(s) succeeded, \(failCount) failed")
+            }
             isConverting = false
         }
     }
@@ -360,6 +386,12 @@ class ConversionViewModel: ObservableObject {
             var failCount = 0
 
             for (index, clip) in clips.enumerated() {
+                // Check for cancellation before starting each clip
+                if isCancelled {
+                    log("Cancellation requested, stopping...")
+                    break
+                }
+
                 let outputName = "\(clip.displayName).\(ext)"
                 let outputURL = outputDir.appendingPathComponent(outputName)
 
@@ -377,24 +409,40 @@ class ConversionViewModel: ObservableObject {
                         }
                     }
 
-                    conversionStatus[clip.id] = .completed
-                    log("SUCCESS: Created \(outputName)")
-                    successCount += 1
+                    // Check if cancelled during conversion
+                    if isCancelled {
+                        conversionStatus[clip.id] = .pending
+                    } else {
+                        conversionStatus[clip.id] = .completed
+                        log("SUCCESS: Created \(outputName)")
+                        successCount += 1
+                    }
 
                 } catch {
-                    conversionStatus[clip.id] = .failed(error: error.localizedDescription)
-                    log("FAILED: \(clip.displayName) - \(error.localizedDescription)")
-                    failCount += 1
+                    // Don't show error if cancelled
+                    if !isCancelled {
+                        conversionStatus[clip.id] = .failed(error: error.localizedDescription)
+                        log("FAILED: \(clip.displayName) - \(error.localizedDescription)")
+                        failCount += 1
+                    } else {
+                        conversionStatus[clip.id] = .pending
+                    }
                 }
             }
 
-            log("Conversion complete: \(successCount) succeeded, \(failCount) failed")
+            if isCancelled {
+                log("Conversion cancelled")
+            } else {
+                log("Conversion complete: \(successCount) succeeded, \(failCount) failed")
+            }
             isConverting = false
         }
     }
 
     func cancelConversion() {
+        isCancelled = true
         ffmpeg.cancelConversion()
         isConverting = false
+        log("Conversion cancelled by user")
     }
 }
