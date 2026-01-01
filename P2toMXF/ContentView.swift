@@ -1,0 +1,445 @@
+import SwiftUI
+import AppKit
+
+struct ContentView: View {
+    @StateObject private var viewModel = ConversionViewModel()
+    @State private var showingP2Picker = false
+    @State private var showingOutputPicker = false
+    @State private var showConsole = true
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            headerView
+                .padding()
+                .background(.ultraThinMaterial)
+
+            Divider()
+
+            // Main content
+            if let card = viewModel.p2Card {
+                clipListView(card: card)
+            } else {
+                emptyStateView
+            }
+
+            // Console output
+            if showConsole && !viewModel.consoleLog.isEmpty {
+                Divider()
+                consoleView
+            }
+
+            Divider()
+
+            // Footer with settings and convert button
+            footerView
+                .padding()
+                .background(.ultraThinMaterial)
+        }
+        .frame(minWidth: 600, minHeight: 500)
+        .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
+            Button("OK") { viewModel.errorMessage = nil }
+        } message: {
+            Text(viewModel.errorMessage ?? "")
+        }
+    }
+
+    // MARK: - Header
+
+    private var headerView: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("P2 to MXF Converter")
+                    .font(.headline)
+
+                if let version = viewModel.ffmpegVersion {
+                    Text(version)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else if !viewModel.hasFFmpeg {
+                    Label("FFmpeg not found", systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+            }
+
+            Spacer()
+
+            Button {
+                showingP2Picker = true
+            } label: {
+                Label("Load P2 Card", systemImage: "folder.badge.plus")
+            }
+            .fileImporter(
+                isPresented: $showingP2Picker,
+                allowedContentTypes: [.folder],
+                allowsMultipleSelection: false
+            ) { result in
+                if case .success(let urls) = result, let url = urls.first {
+                    _ = url.startAccessingSecurityScopedResource()
+                    viewModel.loadP2Card(from: url)
+                }
+            }
+        }
+    }
+
+    // MARK: - Console
+
+    private var consoleView: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Console")
+                    .font(.caption.bold())
+                Spacer()
+                Button("Copy") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(viewModel.consoleLog, forType: .string)
+                }
+                .buttonStyle(.plain)
+                .font(.caption)
+                .foregroundStyle(.blue)
+                Button("Clear") {
+                    viewModel.clearConsole()
+                }
+                .buttonStyle(.plain)
+                .font(.caption)
+                .foregroundStyle(.blue)
+                Button(showConsole ? "Hide" : "Show") {
+                    showConsole.toggle()
+                }
+                .buttonStyle(.plain)
+                .font(.caption)
+                .foregroundStyle(.blue)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.black.opacity(0.8))
+            .foregroundStyle(.white)
+
+            ScrollViewReader { proxy in
+                ScrollView {
+                    Text(viewModel.consoleLog)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.green)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(8)
+                        .id("bottom")
+                }
+                .frame(height: 120)
+                .background(Color.black.opacity(0.9))
+                .onChange(of: viewModel.consoleLog) { _, _ in
+                    proxy.scrollTo("bottom", anchor: .bottom)
+                }
+            }
+        }
+    }
+
+    // MARK: - Empty State
+
+    private var emptyStateView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "film.stack")
+                .font(.system(size: 48))
+                .foregroundStyle(.secondary)
+
+            Text("No P2 Card Loaded")
+                .font(.title2)
+                .foregroundStyle(.secondary)
+
+            Text("Click \"Load P2 Card\" to select a P2 card folder")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Clip List
+
+    private func clipListView(card: P2Card) -> some View {
+        VStack(spacing: 0) {
+            // Card info bar
+            HStack {
+                Label(card.name, systemImage: "sdcard")
+                    .font(.subheadline.bold())
+
+                Spacer()
+
+                Text("\(card.clipCount) clips")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Button(viewModel.allClipsSelected ? "Deselect All" : "Select All") {
+                    if viewModel.allClipsSelected {
+                        viewModel.deselectAllClips()
+                    } else {
+                        viewModel.selectAllClips()
+                    }
+                }
+                .buttonStyle(.plain)
+                .font(.caption)
+                .foregroundStyle(.blue)
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(Color.secondary.opacity(0.1))
+
+            // Clips table
+            List(card.clips, selection: $viewModel.selectedClips) { clip in
+                ClipRowView(
+                    clip: clip,
+                    isSelected: viewModel.selectedClips.contains(clip.id),
+                    status: viewModel.conversionStatus[clip.id]
+                )
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    viewModel.toggleClipSelection(clip)
+                }
+            }
+            .listStyle(.inset)
+        }
+    }
+
+    // MARK: - Footer
+
+    private var footerView: some View {
+        VStack(spacing: 8) {
+            // Settings row
+            HStack(spacing: 16) {
+                // Processing mode picker
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Mode")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Picker("", selection: $viewModel.settings.processingMode) {
+                        ForEach(ConversionSettings.ProcessingMode.allCases, id: \.self) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 150)
+                }
+
+                // Container picker
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Format")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Picker("", selection: $viewModel.settings.outputContainer) {
+                        ForEach(ConversionSettings.OutputContainer.allCases, id: \.self) { container in
+                            Text(container.rawValue).tag(container)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 70)
+                }
+
+                // Output filename (only in concatenate mode)
+                if viewModel.settings.processingMode == .concatenate {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Output Filename")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        HStack(spacing: 4) {
+                            TextField("Enter filename", text: $viewModel.settings.outputFilename)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 160)
+
+                            Text(".\(viewModel.settings.outputContainer.fileExtension)")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                Divider()
+                    .frame(height: 40)
+
+                // Audio settings
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Audio")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Picker("", selection: $viewModel.settings.audioMapping) {
+                        ForEach(ConversionSettings.AudioMapping.allCases, id: \.self) { mapping in
+                            Text(mapping.rawValue).tag(mapping)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 140)
+                }
+
+                Toggle("Preserve TC", isOn: $viewModel.settings.preserveTimecode)
+                    .toggleStyle(.checkbox)
+
+                Spacer()
+            }
+
+            // TC Warning (only in concatenate mode with issues)
+            if viewModel.settings.processingMode == .concatenate,
+               let warning = viewModel.tcWarningMessage {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    Text(warning)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    Spacer()
+                }
+            }
+
+            Divider()
+
+            // Action row
+            HStack(spacing: 16) {
+                // Output directory
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Output Directory")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    HStack {
+                        if let outputDir = viewModel.settings.outputDirectory {
+                            Text(outputDir.lastPathComponent)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        } else {
+                            Text("Not selected")
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Button("Choose...") {
+                            showingOutputPicker = true
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+                .fileImporter(
+                    isPresented: $showingOutputPicker,
+                    allowedContentTypes: [.folder],
+                    allowsMultipleSelection: false
+                ) { result in
+                    if case .success(let urls) = result, let url = urls.first {
+                        _ = url.startAccessingSecurityScopedResource()
+                        viewModel.settings.outputDirectory = url
+                    }
+                }
+
+                Spacer()
+
+                // Convert button
+                if viewModel.isConverting {
+                    Button("Cancel") {
+                        viewModel.cancelConversion()
+                    }
+                    .buttonStyle(.bordered)
+
+                    ProgressView()
+                        .scaleEffect(0.7)
+                } else {
+                    Button {
+                        viewModel.startConversion()
+                    } label: {
+                        Label(convertButtonLabel, systemImage: convertButtonIcon)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!viewModel.canConvert)
+                }
+            }
+        }
+    }
+
+    // MARK: - Helpers
+
+    private var convertButtonLabel: String {
+        let count = viewModel.selectedClipCount
+        switch viewModel.settings.processingMode {
+        case .concatenate:
+            return "Merge \(count) Clips"
+        case .individual:
+            return "Convert \(count) Clips"
+        }
+    }
+
+    private var convertButtonIcon: String {
+        switch viewModel.settings.processingMode {
+        case .concatenate:
+            return "arrow.triangle.merge"
+        case .individual:
+            return "square.and.arrow.down.on.square"
+        }
+    }
+}
+
+// MARK: - Clip Row View
+
+struct ClipRowView: View {
+    let clip: P2Clip
+    let isSelected: Bool
+    let status: ConversionStatus?
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Selection indicator
+            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                .foregroundStyle(isSelected ? .blue : .secondary)
+
+            // Clip info
+            VStack(alignment: .leading, spacing: 2) {
+                Text(clip.displayName)
+                    .font(.body.bold())
+
+                HStack(spacing: 8) {
+                    Label(clip.startTimecode.isEmpty ? "--:--:--:--" : clip.startTimecode,
+                          systemImage: "clock")
+                    Label(clip.formattedDuration, systemImage: "timer")
+                    Label(clip.videoCodec, systemImage: "film")
+                    Label("\(clip.audioChannels) ch", systemImage: "speaker.wave.2")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            // Conversion status
+            if let status = status {
+                statusBadge(for: status)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private func statusBadge(for status: ConversionStatus) -> some View {
+        switch status {
+        case .pending:
+            Text("Pending")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        case .inProgress(let progress):
+            HStack(spacing: 6) {
+                ProgressView(value: progress)
+                    .frame(width: 60)
+                Text("\(Int(progress * 100))%")
+                    .font(.caption.monospacedDigit())
+            }
+        case .completed:
+            Label("Done", systemImage: "checkmark.circle.fill")
+                .font(.caption)
+                .foregroundStyle(.green)
+        case .failed(let error):
+            Label("Failed", systemImage: "xmark.circle.fill")
+                .font(.caption)
+                .foregroundStyle(.red)
+                .help(error)
+        }
+    }
+}
+
+#Preview {
+    ContentView()
+}

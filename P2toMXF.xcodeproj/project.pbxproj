@@ -1,0 +1,452 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 70;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		23438BE32F067E0400ACE31E /* BMXWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23438BE22F067E0400ACE31E /* BMXWrapper.swift */; };
+		23438BE62F067E9D00ACE31E /* bmxtranswrap in Resources */ = {isa = PBXBuildFile; fileRef = 23438BE42F067E9D00ACE31E /* bmxtranswrap */; };
+		23438BE72F067E9D00ACE31E /* mxf2raw in Resources */ = {isa = PBXBuildFile; fileRef = 23438BE52F067E9D00ACE31E /* mxf2raw */; };
+		A01000001 /* P2toMXFApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000001 /* P2toMXFApp.swift */; };
+		A01000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000002 /* ContentView.swift */; };
+		A01000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A02000003 /* Assets.xcassets */; };
+		A01000004 /* P2CardParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000004 /* P2CardParser.swift */; };
+		A01000005 /* FFmpegWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000005 /* FFmpegWrapper.swift */; };
+		A01000006 /* P2Clip.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000006 /* P2Clip.swift */; };
+		A01000007 /* ConversionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000007 /* ConversionViewModel.swift */; };
+		A01000008 /* ffmpeg in Resources */ = {isa = PBXBuildFile; fileRef = A0200000A /* ffmpeg */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		23438BE22F067E0400ACE31E /* BMXWrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BMXWrapper.swift; sourceTree = "<group>"; };
+		23438BE42F067E9D00ACE31E /* bmxtranswrap */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = bmxtranswrap; sourceTree = "<group>"; };
+		23438BE52F067E9D00ACE31E /* mxf2raw */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = mxf2raw; sourceTree = "<group>"; };
+		A02000001 /* P2toMXFApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P2toMXFApp.swift; sourceTree = "<group>"; };
+		A02000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		A02000003 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A02000004 /* P2CardParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P2CardParser.swift; sourceTree = "<group>"; };
+		A02000005 /* FFmpegWrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FFmpegWrapper.swift; sourceTree = "<group>"; };
+		A02000006 /* P2Clip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P2Clip.swift; sourceTree = "<group>"; };
+		A02000007 /* ConversionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionViewModel.swift; sourceTree = "<group>"; };
+		A02000008 /* P2toMXF.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = P2toMXF.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A02000009 /* P2toMXF.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = P2toMXF.entitlements; sourceTree = "<group>"; };
+		A0200000A /* ffmpeg */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = ffmpeg; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		23438C082F06820F00ACE31E /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				libbmx.1.dylib,
+				libexpat.1.dylib,
+				libMXF.1.dylib,
+				"libMXF++.1.dylib",
+				liburiparser.1.dylib,
+			);
+			target = A05000001 /* P2toMXF */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		23438BED2F067EBF00ACE31E /* lib */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (23438C082F06820F00ACE31E /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = lib; sourceTree = "<group>"; };
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A03000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A04000001 = {
+			isa = PBXGroup;
+			children = (
+				A04000002 /* P2toMXF */,
+				A04000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A04000002 /* P2toMXF */ = {
+			isa = PBXGroup;
+			children = (
+				A02000001 /* P2toMXFApp.swift */,
+				A02000002 /* ContentView.swift */,
+				A02000007 /* ConversionViewModel.swift */,
+				A04000004 /* Models */,
+				A04000005 /* Services */,
+				A04000006 /* Resources */,
+				A02000003 /* Assets.xcassets */,
+				A02000009 /* P2toMXF.entitlements */,
+			);
+			path = P2toMXF;
+			sourceTree = "<group>";
+		};
+		A04000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A02000008 /* P2toMXF.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A04000004 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				A02000006 /* P2Clip.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		A04000005 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				A02000004 /* P2CardParser.swift */,
+				A02000005 /* FFmpegWrapper.swift */,
+				23438BE22F067E0400ACE31E /* BMXWrapper.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		A04000006 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				23438BED2F067EBF00ACE31E /* lib */,
+				23438BE42F067E9D00ACE31E /* bmxtranswrap */,
+				23438BE52F067E9D00ACE31E /* mxf2raw */,
+				A0200000A /* ffmpeg */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A05000001 /* P2toMXF */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A06000003 /* Build configuration list for PBXNativeTarget "P2toMXF" */;
+			buildPhases = (
+				A05000002 /* Sources */,
+				A03000001 /* Frameworks */,
+				A05000003 /* Resources */,
+				23438BF32F067F7400ACE31E /* ShellScript */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				23438BED2F067EBF00ACE31E /* lib */,
+			);
+			name = P2toMXF;
+			productName = P2toMXF;
+			productReference = A02000008 /* P2toMXF.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A00000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 2620;
+				TargetAttributes = {
+					A05000001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = A06000001 /* Build configuration list for PBXProject "P2toMXF" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A04000001;
+			productRefGroup = A04000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A05000001 /* P2toMXF */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A05000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A01000003 /* Assets.xcassets in Resources */,
+				23438BE62F067E9D00ACE31E /* bmxtranswrap in Resources */,
+				23438BE72F067E9D00ACE31E /* mxf2raw in Resources */,
+				A01000008 /* ffmpeg in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		23438BF32F067F7400ACE31E /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "  # Copy BMX libraries to app bundle\n  ditto \"${SRCROOT}/P2toMXF/Resources/lib\" \"${BUILT_PRODUCTS_DIR}/${CONTENTS_FOLDER_PATH}/Resources/lib\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A05000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A01000001 /* P2toMXFApp.swift in Sources */,
+				23438BE32F067E0400ACE31E /* BMXWrapper.swift in Sources */,
+				A01000002 /* ContentView.swift in Sources */,
+				A01000004 /* P2CardParser.swift in Sources */,
+				A01000005 /* FFmpegWrapper.swift in Sources */,
+				A01000006 /* P2Clip.swift in Sources */,
+				A01000007 /* ConversionViewModel.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		A06000002 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = FDMSRXXN73;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		A06000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = FDMSRXXN73;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		A06000005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = P2toMXF/P2toMXF.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_ASSET_PATHS = "";
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/P2toMXF/Resources/lib",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.6;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.p2tomxf.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		A06000006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = P2toMXF/P2toMXF.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_ASSET_PATHS = "";
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/P2toMXF/Resources/lib",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.6;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.p2tomxf.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A06000001 /* Build configuration list for PBXProject "P2toMXF" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A06000002 /* Debug */,
+				A06000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A06000003 /* Build configuration list for PBXNativeTarget "P2toMXF" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A06000005 /* Debug */,
+				A06000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A00000001 /* Project object */;
+}
