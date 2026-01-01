@@ -592,9 +592,11 @@ class ConversionViewModel: ObservableObject {
     // MARK: - Queue Integration
 
     /// Adds the current selection to the batch queue
+    /// - Parameters:
+    ///   - autoStart: If true, immediately starts queue processing (for "Convert Now")
     /// - Returns: True if successfully added, false if validation failed
     @discardableResult
-    func addToQueue() -> Bool {
+    func addToQueue(autoStart: Bool = false) -> Bool {
         guard let card = p2Card else {
             errorMessage = "No P2 card loaded"
             return false
@@ -607,14 +609,14 @@ class ConversionViewModel: ObservableObject {
 
         switch settings.processingMode {
         case .concatenate:
-            return addConcatenateJobsToQueue(card: card, outputDir: outputDir)
+            return addConcatenateJobsToQueue(card: card, outputDir: outputDir, autoStart: autoStart)
         case .individual:
-            return addIndividualJobToQueue(card: card, outputDir: outputDir)
+            return addIndividualJobToQueue(card: card, outputDir: outputDir, autoStart: autoStart)
         }
     }
 
     /// Adds concatenate jobs to queue (one per fully selected group)
-    private func addConcatenateJobsToQueue(card: P2Card, outputDir: URL) -> Bool {
+    private func addConcatenateJobsToQueue(card: P2Card, outputDir: URL, autoStart: Bool) -> Bool {
         let groups = fullySelectedGroups
         guard !groups.isEmpty else {
             errorMessage = "No groups fully selected for merging"
@@ -635,17 +637,24 @@ class ConversionViewModel: ObservableObject {
             let outputName = "\(effectiveOutputFilename)\(suffix).\(ext)"
             let outputURL = outputDir.appendingPathComponent(outputName)
 
+            // Only autoStart on the first job (to trigger queue processing)
+            let shouldAutoStart = autoStart && index == 0
             queueManager.addJob(
                 cardName: card.name,
                 cardPath: card.rootPath,
                 clips: group.clips,
                 settings: settings,
-                destinationURL: outputURL
+                destinationURL: outputURL,
+                autoStart: shouldAutoStart
             )
         }
 
         let jobCount = groups.count
-        queueFeedback = "Added \(jobCount) job\(jobCount == 1 ? "" : "s") to queue"
+        if autoStart {
+            queueFeedback = "Started \(jobCount) job\(jobCount == 1 ? "" : "s")"
+        } else {
+            queueFeedback = "Added \(jobCount) job\(jobCount == 1 ? "" : "s") to queue"
+        }
 
         // Auto-clear after 3 seconds
         Task {
@@ -657,7 +666,7 @@ class ConversionViewModel: ObservableObject {
     }
 
     /// Adds an individual files job to queue
-    private func addIndividualJobToQueue(card: P2Card, outputDir: URL) -> Bool {
+    private func addIndividualJobToQueue(card: P2Card, outputDir: URL, autoStart: Bool) -> Bool {
         let clips = sortedSelectedClips
         guard !clips.isEmpty else {
             errorMessage = "No clips selected"
@@ -672,11 +681,16 @@ class ConversionViewModel: ObservableObject {
             cardPath: card.rootPath,
             clips: clips,
             settings: settings,
-            destinationURL: outputDir
+            destinationURL: outputDir,
+            autoStart: autoStart
         )
 
         let clipCount = clips.count
-        queueFeedback = "Added job (\(clipCount) clip\(clipCount == 1 ? "" : "s")) to queue"
+        if autoStart {
+            queueFeedback = "Started job (\(clipCount) clip\(clipCount == 1 ? "" : "s"))"
+        } else {
+            queueFeedback = "Added job (\(clipCount) clip\(clipCount == 1 ? "" : "s")) to queue"
+        }
 
         // Auto-clear after 3 seconds
         Task {

@@ -1,5 +1,7 @@
 import Foundation
 import SwiftUI
+import IOKit
+import IOKit.pwr_mgt
 
 /// Manages a queue of conversion jobs, executing them sequentially
 @MainActor
@@ -15,6 +17,21 @@ class QueueManager: ObservableObject {
     // MARK: - Private
     private let ffmpeg = FFmpegWrapper()
     private var currentJobId: UUID?
+    private var sleepAssertionID: IOPMAssertionID = 0
+    private var isSleepPrevented = false
+
+    // MARK: - Persistence
+    private static let queueFileName = "queue.json"
+
+    private var queueFileURL: URL {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let appFolder = appSupport.appendingPathComponent("P2toMXF", isDirectory: true)
+
+        // Ensure directory exists
+        try? FileManager.default.createDirectory(at: appFolder, withIntermediateDirectories: true)
+
+        return appFolder.appendingPathComponent(Self.queueFileName)
+    }
 
     // MARK: - Computed Properties
 
@@ -61,9 +78,16 @@ class QueueManager: ObservableObject {
         return "\(completedCount) completed, \(failedCount) failed"
     }
 
+    /// Whether there are pending jobs that can be started
+    var hasPendingJobs: Bool {
+        pendingCount > 0
+    }
+
     // MARK: - Init
 
-    private init() {}
+    private init() {
+        loadQueue()
+    }
 
     // MARK: - Logging
 
@@ -76,35 +100,154 @@ class QueueManager: ObservableObject {
         consoleLog = ""
     }
 
+    // MARK: - Persistence
+
+    /// Saves the current queue to disk
+    private func saveQueue() {
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            encoder.dateEncodingStrategy = .iso8601
+
+            let data = try encoder.encode(jobs)
+            try data.write(to: queueFileURL, options: .atomic)
+        } catch {
+            print("Failed to save queue: \(error)")
+        }
+    }
+
+    /// Loads the queue from disk (only pending jobs)
+    private func loadQueue() {
+        guard FileManager.default.fileExists(atPath: queueFileURL.path) else { return }
+
+        do {
+            let data = try Data(contentsOf: queueFileURL)
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+
+            let loadedJobs = try decoder.decode([ConversionJob].self, from: data)
+
+            // Only restore pending and failed jobs (not active/completed)
+            jobs = loadedJobs.filter { job in
+                job.status == .pending || {
+                    if case .failed = job.status { return true }
+                    return false
+                }()
+            }
+
+            // Reset any "active" or "preparing" states to pending
+            for index in jobs.indices {
+                if jobs[index].status == .active || jobs[index].status == .preparing {
+                    jobs[index].status = .pending
+                    jobs[index].progress = 0
+                }
+            }
+
+            if !jobs.isEmpty {
+                log("Restored \(jobs.count) job(s) from previous session")
+            }
+        } catch {
+            print("Failed to load queue: \(error)")
+        }
+    }
+
+    // MARK: - Sleep Prevention
+
+    /// Prevents the system from sleeping while processing
+    private func preventSleep() {
+        guard !isSleepPrevented else { return }
+
+        let reason = "P2toMXF is converting video files" as CFString
+        let result = IOPMAssertionCreateWithName(
+            kIOPMAssertionTypeNoIdleSleep as CFString,
+            IOPMAssertionLevel(kIOPMAssertionLevelOn),
+            reason,
+            &sleepAssertionID
+        )
+
+        if result == kIOReturnSuccess {
+            isSleepPrevented = true
+            log("Sleep prevention enabled")
+        }
+    }
+
+    /// Allows the system to sleep again
+    private func allowSleep() {
+        guard isSleepPrevented else { return }
+
+        IOPMAssertionRelease(sleepAssertionID)
+        isSleepPrevented = false
+        sleepAssertionID = 0
+        log("Sleep prevention disabled")
+    }
+
+    // MARK: - Filename Conflict Resolution
+
+    /// Resolves filename conflicts by appending a counter
+    private func resolveFilenameConflict(for url: URL) -> URL {
+        let directory = url.deletingLastPathComponent()
+        let filename = url.deletingPathExtension().lastPathComponent
+        let ext = url.pathExtension
+
+        // Check against pending jobs
+        let pendingDestinations = jobs
+            .filter { $0.status == .pending }
+            .map { $0.destinationURL.path }
+
+        var finalURL = url
+        var counter = 1
+
+        while pendingDestinations.contains(finalURL.path) || FileManager.default.fileExists(atPath: finalURL.path) {
+            let newFilename = "\(filename) (\(counter)).\(ext)"
+            finalURL = directory.appendingPathComponent(newFilename)
+            counter += 1
+        }
+
+        return finalURL
+    }
+
     // MARK: - Queue Management
 
-    /// Adds a job to the queue
+    /// Adds a job to the queue (does NOT auto-start)
     /// - Parameter job: The conversion job to add
-    func addJob(_ job: ConversionJob) {
-        jobs.append(job)
-        log("Added job: \(job.displayName)")
+    /// - Parameter autoStart: If true, immediately starts processing (for "Convert Now" button)
+    func addJob(_ job: ConversionJob, autoStart: Bool = false) {
+        // Check for filename conflicts and resolve
+        var finalJob = job
+        let resolvedURL = resolveFilenameConflict(for: job.destinationURL)
 
-        // Auto-start if not already processing
-        if !isProcessing {
+        if resolvedURL != job.destinationURL {
+            // Create new job with resolved URL
+            finalJob = ConversionJob(
+                cardName: job.cardName,
+                cardPath: job.cardPath,
+                clips: job.clips,
+                settings: job.settings,
+                destinationURL: resolvedURL
+            )
+            log("Renamed output to avoid conflict: \(resolvedURL.lastPathComponent)")
+        }
+
+        jobs.append(finalJob)
+        log("Added job: \(finalJob.displayName)")
+        saveQueue()
+
+        // Only auto-start if explicitly requested (for "Convert Now" button)
+        if autoStart && !isProcessing {
             Task {
                 await processQueue()
             }
         }
     }
 
-    /// Creates and adds a job from the current ViewModel state
-    /// - Parameters:
-    ///   - cardName: Name of the P2 card
-    ///   - cardPath: Path to the P2 card (for security-scoped access)
-    ///   - clips: Clips to process
-    ///   - settings: Conversion settings
-    ///   - destinationURL: Output path
+    /// Creates and adds a job from parameters
     func addJob(
         cardName: String,
         cardPath: URL,
         clips: [P2Clip],
         settings: ConversionSettings,
-        destinationURL: URL
+        destinationURL: URL,
+        autoStart: Bool = false
     ) {
         let job = ConversionJob(
             cardName: cardName,
@@ -113,7 +256,7 @@ class QueueManager: ObservableObject {
             settings: settings,
             destinationURL: destinationURL
         )
-        addJob(job)
+        addJob(job, autoStart: autoStart)
     }
 
     /// Removes a job from the queue (only if pending, failed, or cancelled)
@@ -124,31 +267,35 @@ class QueueManager: ObservableObject {
         }
         let removed = jobs.remove(at: index)
         log("Removed job: \(removed.displayName)")
+        saveQueue()
     }
 
     /// Clears all completed and failed jobs
     func clearFinishedJobs() {
         jobs.removeAll { $0.status.isFinished }
         log("Cleared finished jobs")
+        saveQueue()
     }
 
-    /// Retries a failed job by resetting its status to pending
+    /// Retries a failed or cancelled job by resetting its status to pending
     func retryJob(_ jobId: UUID) {
-        guard let index = jobs.firstIndex(where: { $0.id == jobId }),
-              case .failed = jobs[index].status else {
+        guard let index = jobs.firstIndex(where: { $0.id == jobId }) else { return }
+
+        let status = jobs[index].status
+        guard case .failed = status else {
+            guard status == .cancelled else { return }
+            // Allow retry for cancelled jobs too
+            jobs[index].status = .pending
+            jobs[index].progress = 0
+            log("Retrying job: \(jobs[index].displayName)")
+            saveQueue()
             return
         }
 
         jobs[index].status = .pending
         jobs[index].progress = 0
         log("Retrying job: \(jobs[index].displayName)")
-
-        // Auto-start if not already processing
-        if !isProcessing {
-            Task {
-                await processQueue()
-            }
-        }
+        saveQueue()
     }
 
     /// Cancels the currently active job
@@ -162,6 +309,7 @@ class QueueManager: ObservableObject {
         jobs[index].status = .cancelled
         jobs[index].progress = 0
         log("Cancelled job: \(jobs[index].displayName)")
+        saveQueue()
     }
 
     /// Cancels all pending jobs (marks as cancelled, doesn't remove)
@@ -170,11 +318,12 @@ class QueueManager: ObservableObject {
             jobs[index].status = .cancelled
         }
         log("Cancelled all pending jobs")
+        saveQueue()
     }
 
-    /// Starts processing the queue if not already running
+    /// Starts processing the queue (manual trigger)
     func startQueue() {
-        guard !isProcessing else { return }
+        guard !isProcessing, hasPendingJobs else { return }
         Task {
             await processQueue()
         }
@@ -186,15 +335,19 @@ class QueueManager: ObservableObject {
     private func processQueue() async {
         guard !isProcessing else { return }
         isProcessing = true
+        preventSleep()
 
         log("=== Queue processing started ===")
 
         while let nextJob = jobs.first(where: { $0.status == .pending }) {
             await processJob(nextJob)
+            saveQueue()
         }
 
+        allowSleep()
         isProcessing = false
         log("=== Queue processing complete ===")
+        saveQueue()
     }
 
     /// Processes a single job

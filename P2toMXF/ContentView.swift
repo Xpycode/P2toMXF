@@ -463,20 +463,33 @@ struct ContentView: View {
                     .disabled(!viewModel.canAddToQueue)
                     .help("Add current selection to the batch queue")
 
-                    // Convert Now button
-                    Button {
-                        viewModel.startConversion()
-                    } label: {
-                        Label(convertButtonLabel, systemImage: convertButtonIcon)
+                    // Context-aware primary action button
+                    if queueManager.hasPendingJobs {
+                        // Queue has pending jobs - show "Start Queue"
+                        Button {
+                            queueManager.startQueue()
+                        } label: {
+                            Label("Start Queue (\(queueManager.pendingCount))", systemImage: "play.fill")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .help("Start processing \(queueManager.pendingCount) queued job\(queueManager.pendingCount == 1 ? "" : "s")")
+                    } else {
+                        // No pending jobs - show "Convert Now" (adds to queue and starts)
+                        Button {
+                            viewModel.addToQueue(autoStart: true)
+                        } label: {
+                            Label(convertButtonLabel, systemImage: convertButtonIcon)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!viewModel.canConvert)
+                        .help("Add to queue and start conversion immediately")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!viewModel.canConvert)
-                    .help("Start conversion immediately")
                 }
             }
         }
         .animation(.easeInOut(duration: 0.2), value: isAnyConversionActive)
         .animation(.easeInOut(duration: 0.2), value: viewModel.queueFeedback)
+        .animation(.easeInOut(duration: 0.2), value: queueManager.hasPendingJobs)
     }
 
     // MARK: - Helpers

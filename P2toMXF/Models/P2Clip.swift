@@ -1,8 +1,8 @@
 import Foundation
 
 /// Represents a single P2 clip with its associated video, audio, and metadata
-struct P2Clip: Identifiable, Hashable {
-    let id = UUID()
+struct P2Clip: Identifiable, Hashable, Codable {
+    let id: UUID
     let clipName: String
     let globalClipID: String
     let duration: String
@@ -11,14 +11,51 @@ struct P2Clip: Identifiable, Hashable {
     let videoCodec: String
     let audioChannels: Int
 
-    // File paths
-    let videoFiles: [URL]
-    let audioFiles: [URL]
-    let metadataFile: URL
+    // File paths (stored as strings for Codable, converted to URLs via computed properties)
+    private let videoFilePaths: [String]
+    private let audioFilePaths: [String]
+    private let metadataFilePath: String
+    private let proxyFilePath: String?
+    private let iconFilePath: String?
 
-    // Thumbnail sources (may be nil if not present on card)
-    let proxyFile: URL?    // PROXY/{ClipName}.MP4 - fast thumbnail source
-    let iconFile: URL?     // ICON/{ClipName}.BMP - first frame only, low-res fallback
+    // MARK: - URL Accessors
+
+    var videoFiles: [URL] { videoFilePaths.map { URL(fileURLWithPath: $0) } }
+    var audioFiles: [URL] { audioFilePaths.map { URL(fileURLWithPath: $0) } }
+    var metadataFile: URL { URL(fileURLWithPath: metadataFilePath) }
+    var proxyFile: URL? { proxyFilePath.map { URL(fileURLWithPath: $0) } }
+    var iconFile: URL? { iconFilePath.map { URL(fileURLWithPath: $0) } }
+
+    // MARK: - Initializers
+
+    init(
+        clipName: String,
+        globalClipID: String,
+        duration: String,
+        startTimecode: String,
+        frameRate: String,
+        videoCodec: String,
+        audioChannels: Int,
+        videoFiles: [URL],
+        audioFiles: [URL],
+        metadataFile: URL,
+        proxyFile: URL?,
+        iconFile: URL?
+    ) {
+        self.id = UUID()
+        self.clipName = clipName
+        self.globalClipID = globalClipID
+        self.duration = duration
+        self.startTimecode = startTimecode
+        self.frameRate = frameRate
+        self.videoCodec = videoCodec
+        self.audioChannels = audioChannels
+        self.videoFilePaths = videoFiles.map { $0.path }
+        self.audioFilePaths = audioFiles.map { $0.path }
+        self.metadataFilePath = metadataFile.path
+        self.proxyFilePath = proxyFile?.path
+        self.iconFilePath = iconFile?.path
+    }
 
     var displayName: String {
         clipName.isEmpty ? globalClipID : clipName
@@ -101,8 +138,8 @@ struct RecordGroup: Identifiable {
 }
 
 /// Conversion settings for the MXF output
-struct ConversionSettings {
-    var outputDirectory: URL?
+struct ConversionSettings: Codable {
+    private var outputDirectoryPath: String?
     var outputFilename: String = ""
     var useFolderNameAsFilename: Bool = false
     var outputContainer: OutputContainer = .mxf
@@ -110,22 +147,39 @@ struct ConversionSettings {
     var preserveTimecode: Bool = true
     var audioMapping: AudioMapping = .allChannels
 
-    enum OutputContainer: String, CaseIterable {
+    // URL accessor (not encoded directly)
+    var outputDirectory: URL? {
+        get { outputDirectoryPath.map { URL(fileURLWithPath: $0) } }
+        set { outputDirectoryPath = newValue?.path }
+    }
+
+    enum OutputContainer: String, CaseIterable, Codable {
         case mxf = "MXF"
         case mov = "MOV"
 
         var fileExtension: String { rawValue.lowercased() }
     }
 
-    enum ProcessingMode: String, CaseIterable {
+    enum ProcessingMode: String, CaseIterable, Codable {
         case individual = "Individual Files"
         case concatenate = "Merge & Concatenate"
     }
 
-    enum AudioMapping: String, CaseIterable {
+    enum AudioMapping: String, CaseIterable, Codable {
         case allChannels = "All Channels"
         case stereoMix = "Stereo Mix (Ch 1-2)"
         case mono = "Mono (Ch 1)"
+    }
+
+    // Custom coding keys to exclude the computed outputDirectory
+    enum CodingKeys: String, CodingKey {
+        case outputDirectoryPath
+        case outputFilename
+        case useFolderNameAsFilename
+        case outputContainer
+        case processingMode
+        case preserveTimecode
+        case audioMapping
     }
 }
 
@@ -299,7 +353,7 @@ enum ConversionStatus: Equatable {
 // MARK: - Batch Queue Models
 
 /// Status of a conversion job in the queue
-enum JobStatus: Equatable {
+enum JobStatus: Equatable, Codable {
     case pending       // Waiting in queue
     case preparing     // Gathering files/rewrapping
     case active        // FFmpeg is processing
@@ -335,21 +389,63 @@ enum JobStatus: Equatable {
         default: return false
         }
     }
+
+    // MARK: - Codable (custom for associated value)
+
+    private enum CodingKeys: String, CodingKey {
+        case type, errorMessage
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(String.self, forKey: .type)
+
+        switch type {
+        case "pending": self = .pending
+        case "preparing": self = .preparing
+        case "active": self = .active
+        case "completed": self = .completed
+        case "failed":
+            let message = try container.decode(String.self, forKey: .errorMessage)
+            self = .failed(message)
+        case "cancelled": self = .cancelled
+        default: self = .pending
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+
+        switch self {
+        case .pending: try container.encode("pending", forKey: .type)
+        case .preparing: try container.encode("preparing", forKey: .type)
+        case .active: try container.encode("active", forKey: .type)
+        case .completed: try container.encode("completed", forKey: .type)
+        case .failed(let message):
+            try container.encode("failed", forKey: .type)
+            try container.encode(message, forKey: .errorMessage)
+        case .cancelled: try container.encode("cancelled", forKey: .type)
+        }
+    }
 }
 
 /// A single conversion job in the queue
-struct ConversionJob: Identifiable {
+struct ConversionJob: Identifiable, Codable {
     let id: UUID
     let cardName: String          // Source P2 card name
-    let cardPath: URL             // For security-scoped access
+    private let cardPathString: String  // For security-scoped access (stored as path)
     let clips: [P2Clip]           // Clips to process
     let settings: ConversionSettings
-    let destinationURL: URL       // Final output path (file or directory)
+    private let destinationPathString: String  // Final output path (stored as path)
     let createdAt: Date
 
     var status: JobStatus = .pending
     var progress: Double = 0.0    // 0.0 to 1.0
     var startedAt: Date?          // When processing started (for elapsed time)
+
+    // URL accessors
+    var cardPath: URL { URL(fileURLWithPath: cardPathString) }
+    var destinationURL: URL { URL(fileURLWithPath: destinationPathString) }
 
     /// Display name for the job (uses output filename or card name)
     var displayName: String {
@@ -386,10 +482,16 @@ struct ConversionJob: Identifiable {
     ) {
         self.id = UUID()
         self.cardName = cardName
-        self.cardPath = cardPath
+        self.cardPathString = cardPath.path
         self.clips = clips
         self.settings = settings
-        self.destinationURL = destinationURL
+        self.destinationPathString = destinationURL.path
         self.createdAt = Date()
+    }
+
+    // Codable keys
+    enum CodingKeys: String, CodingKey {
+        case id, cardName, cardPathString, clips, settings
+        case destinationPathString, createdAt, status, progress, startedAt
     }
 }

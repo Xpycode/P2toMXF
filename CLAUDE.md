@@ -479,3 +479,89 @@ Collapsible panel showing the queue:
 - `Models/P2Clip.swift` - Added `ConversionJob`, `JobStatus`
 - `ConversionViewModel.swift` - Added queue integration methods
 - `ContentView.swift` - Added queue panel, toggle button, "Add to Queue" button
+
+---
+
+## Session Log: 2026-01-01 (Enhanced Batch Queue)
+
+### Overview
+Major enhancements to the batch queue system: manual start control, queue persistence, filename conflict resolution, and sleep prevention. Implements the refined architecture from `UPDATED_QUEUE_PLAN.md`.
+
+### New Features
+
+#### 1. Queue Persistence (Codable + JSON)
+Queue state survives app restarts/crashes:
+- All data models now implement `Codable`: `P2Clip`, `ConversionSettings`, `JobStatus`, `ConversionJob`
+- Queue saved to `~/Library/Application Support/P2toMXF/queue.json`
+- Only pending and failed jobs restored on launch (completed jobs cleared)
+- Active jobs reset to pending if app crashes mid-conversion
+
+#### 2. Manual Start Control
+Disabled auto-start for better user control:
+- `addJob()` no longer auto-starts queue processing
+- New `autoStart: Bool` parameter for immediate execution
+- "Convert Now" → adds to queue AND starts (unified execution path)
+- "Add to Queue" → adds without starting
+- "Start Queue (N)" button appears when pending jobs exist
+
+#### 3. Filename Conflict Resolution
+Prevents overwrites when queuing duplicate filenames:
+- Checks against all pending job destinations
+- Checks against existing files on disk
+- Auto-renames with counter: `Output.mxf` → `Output (1).mxf`
+- Logs the rename action
+
+#### 4. Sleep Prevention (IOPMAssertion)
+Prevents Mac from sleeping during long conversions:
+```swift
+import IOKit.pwr_mgt
+
+IOPMAssertionCreateWithName(
+    kIOPMAssertionTypeNoIdleSleep as CFString,
+    IOPMAssertionLevel(kIOPMAssertionLevelOn),
+    "P2toMXF is converting video files" as CFString,
+    &sleepAssertionID
+)
+```
+- Enabled when queue starts processing
+- Released when queue completes or stops
+- User can still manually sleep the Mac
+
+### Context-Aware UI Buttons
+
+| Queue State | Primary Button | Action |
+| :--- | :--- | :--- |
+| Empty | "Convert Now" | Add to queue + start |
+| Has Pending | "Start Queue (N)" | Start queue processing |
+| Processing | "Stop" | Cancel current job |
+
+### Architecture Changes
+
+#### P2Clip.swift - Codable Support
+- URL properties stored as String paths internally
+- Computed properties convert to/from URL
+- Custom Codable for `JobStatus` enum with associated value
+
+#### QueueManager.swift - New Methods
+```swift
+// Persistence
+private func saveQueue()
+private func loadQueue()
+
+// Sleep prevention
+private func preventSleep()
+private func allowSleep()
+
+// Conflict resolution
+private func resolveFilenameConflict(for url: URL) -> URL
+
+// Updated addJob signature
+func addJob(_ job: ConversionJob, autoStart: Bool = false)
+```
+
+### Files Modified
+- `Models/P2Clip.swift` - Added `Codable` to all models, URL→String storage
+- `Services/QueueManager.swift` - Persistence, sleep prevention, conflict resolution
+- `ConversionViewModel.swift` - `addToQueue(autoStart:)` parameter
+- `ContentView.swift` - Context-aware primary action button
+- `Views/QueueListView.swift` - Added "Start" button in queue controls

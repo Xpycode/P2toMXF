@@ -153,6 +153,18 @@ struct QueueListView: View {
                 .foregroundStyle(.red)
             }
 
+            // Start Queue button (when not processing)
+            if queueManager.hasPendingJobs && !queueManager.isProcessing {
+                Button {
+                    queueManager.startQueue()
+                } label: {
+                    Label("Start", systemImage: "play.fill")
+                        .font(.caption)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+
             // Cancel current
             if queueManager.isProcessing {
                 Button {
