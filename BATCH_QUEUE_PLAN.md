@@ -74,8 +74,29 @@ A central service (Singleton or EnvironmentObject) that manages the global state
 
 ## Implementation Phases
 
-1.  **Phase 1**: Define `ConversionJob` and create a basic `QueueManager`.
-2.  **Phase 2**: Add "Add to Queue" logic to `ConversionViewModel`.
-3.  **Phase 3**: Create a `QueueListView` to display the background tasks.
-4.  **Phase 4**: Implement the execution loop in `QueueManager` (moving logic out of the local ViewModel).
-5.  **Phase 5**: Add queue controls (Cancel All, Retry Failed, Clear Completed).
+1.  **Phase 1**: Define `ConversionJob` and create a basic `QueueManager`. ✓
+2.  **Phase 2**: Add "Add to Queue" logic to `ConversionViewModel`. ✓
+3.  **Phase 3**: Create a `QueueListView` to display the background tasks. ✓
+4.  **Phase 4**: Implement the execution loop in `QueueManager` (moving logic out of the local ViewModel). ✓
+5.  **Phase 5**: Add queue controls (Cancel All, Retry Failed, Clear Completed). ✓
+
+---
+
+## Implementation Complete (2026-01-01)
+
+### Files Created
+- `P2toMXF/Services/QueueManager.swift` - Central queue management service
+- `P2toMXF/Views/QueueListView.swift` - Collapsible queue panel UI
+
+### Files Modified
+- `P2toMXF/Models/P2Clip.swift` - Added `ConversionJob` and `JobStatus` types
+- `P2toMXF/ConversionViewModel.swift` - Added `addToQueue()` method
+- `P2toMXF/ContentView.swift` - Integrated queue panel and "Add to Queue" button
+
+### Key Features
+- **Add to Queue**: Button next to Convert that queues jobs without starting immediately
+- **Queue Panel**: Collapsible panel showing all jobs with status, progress, and controls
+- **Sequential Execution**: Jobs run one at a time automatically
+- **Console Integration**: Console shows queue output when processing
+- **Job Controls**: Remove pending, retry failed, clear finished jobs
+- **Visual Feedback**: Badge on queue toggle showing pending count

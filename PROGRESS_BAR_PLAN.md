@@ -62,7 +62,21 @@ Add `@Published` properties to `ConversionViewModel` (or `Job` in the future):
 
 ---
 
-## 4. Batch Queue Compatibility
+## 4. File Operations Visibility (Finalizing Phase)
+
+### The Problem
+After FFmpeg finishes (100%), the system might spend significant time moving/copying the large output file from the temporary directory to the final destination (especially if targeting an external drive).
+
+### Solution
+- **Distinct State**: Introduce a `.finalizing` or `.movingFile` state in `ConversionStatus`.
+- **UI Feedback**:
+    - Change the progress bar style to **Indeterminate** (pulsing/striped) during this phase.
+    - Status text: "Moving file to destination..." or "Finalizing export...".
+    - Disable cancellation (or warn that it will leave a partial file) during this critical I/O phase.
+
+---
+
+## 5. Batch Queue Compatibility
 
 The UI component `ProgressControlPanel` should be reusable.
 - **Single Mode**: Shows progress of the single active task.

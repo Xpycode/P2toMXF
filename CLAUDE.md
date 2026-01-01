@@ -244,6 +244,7 @@ codesign --force --sign - bmxtranswrap mxf2raw lib/*.dylib
    - Option A: `download-deps.sh` script fetching from https://evermeet.cx/ffmpeg/
    - Option B: Xcode build phase that downloads if missing
    - Option C: Git LFS for large file storage
+7. ~~**Multi-job queueing**: Queue multiple conversion tasks and execute sequentially~~ ✓ Done
 
 ---
 
@@ -407,3 +408,74 @@ var timecodeIssues: [(clip1: P2Clip, clip2: P2Clip, gapFrames: Int)]
 - `Assets.xcassets/AppIcon.appiconset/` - All icon sizes
 - `Assets.xcassets/AboutIcon.imageset/` - About view icon
 - `Credits.rtf` - About panel credits with links
+
+---
+
+## Session Log: 2026-01-01 (Batch Queue)
+
+### Multi-Job Queue Implementation
+Enables users to queue multiple independent conversion tasks and execute them sequentially. Decouples "setup" from "execution" - users can configure jobs while others run.
+
+### New Data Structures
+
+#### JobStatus Enum (P2Clip.swift)
+```swift
+enum JobStatus: Equatable {
+    case pending       // Waiting in queue
+    case preparing     // Gathering files/rewrapping
+    case active        // FFmpeg is processing
+    case completed     // Successfully finished
+    case failed(String) // Error encountered
+    case cancelled     // User cancelled
+}
+```
+
+#### ConversionJob Struct (P2Clip.swift)
+```swift
+struct ConversionJob: Identifiable {
+    let id: UUID
+    let cardName: String          // Source P2 card name
+    let cardPath: URL             // For security-scoped access
+    let clips: [P2Clip]           // Clips to process
+    let settings: ConversionSettings
+    let destinationURL: URL       // Final output path
+    let createdAt: Date
+    var status: JobStatus = .pending
+    var progress: Double = 0.0    // 0.0 to 1.0
+}
+```
+
+### QueueManager Service (Services/QueueManager.swift)
+Central singleton service managing the job queue:
+- **Queue Storage**: Array of `ConversionJob` objects
+- **Sequential Execution**: Picks next pending job automatically
+- **Service Orchestration**: Communicates with FFmpegWrapper
+- **Security Scoped Access**: Handles `startAccessingSecurityScopedResource()` for each job
+- **Status Tracking**: Updates job status and progress in real-time
+
+### QueueListView (Views/QueueListView.swift)
+Collapsible panel showing the queue:
+- **Job Rows**: Card name, clip count, format, status icon, progress bar
+- **Job Controls**: Remove pending, retry failed, clear finished
+- **Global Controls**: Cancel current, cancel all pending
+
+### UI Integration (ContentView.swift)
+- **"Add to Queue" Button**: Next to Convert, queues current selection
+- **Queue Toggle**: Header button shows/hides queue panel with badge
+- **Console Integration**: Shows queue output when processing
+- **Feedback Message**: Temporary "Added X jobs to queue" confirmation
+
+### ViewModel Integration (ConversionViewModel.swift)
+- `addToQueue()`: Validates settings and creates job(s)
+- `addConcatenateJobsToQueue()`: Creates one job per fully selected group
+- `addIndividualJobToQueue()`: Creates single job for selected clips
+- `canAddToQueue`: Same validation as `canConvert`
+
+### Files Created
+- `Services/QueueManager.swift` - Queue management singleton
+- `Views/QueueListView.swift` - Queue panel UI
+
+### Files Modified
+- `Models/P2Clip.swift` - Added `ConversionJob`, `JobStatus`
+- `ConversionViewModel.swift` - Added queue integration methods
+- `ContentView.swift` - Added queue panel, toggle button, "Add to Queue" button

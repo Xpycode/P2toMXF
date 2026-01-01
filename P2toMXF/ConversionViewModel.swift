@@ -21,6 +21,9 @@ class ConversionViewModel: ObservableObject {
     @Published var ffmpegVersion: String?
     @Published var consoleLog: String = ""
 
+    /// Feedback message after adding to queue
+    @Published var queueFeedback: String?
+
     var hasFFmpeg: Bool {
         ffmpeg.isFFmpegAvailable
     }
@@ -444,5 +447,108 @@ class ConversionViewModel: ObservableObject {
         ffmpeg.cancelConversion()
         isConverting = false
         log("Conversion cancelled by user")
+    }
+
+    // MARK: - Queue Integration
+
+    /// Adds the current selection to the batch queue
+    /// - Returns: True if successfully added, false if validation failed
+    @discardableResult
+    func addToQueue() -> Bool {
+        guard let card = p2Card else {
+            errorMessage = "No P2 card loaded"
+            return false
+        }
+
+        guard let outputDir = settings.outputDirectory else {
+            errorMessage = "Please select an output directory"
+            return false
+        }
+
+        switch settings.processingMode {
+        case .concatenate:
+            return addConcatenateJobsToQueue(card: card, outputDir: outputDir)
+        case .individual:
+            return addIndividualJobToQueue(card: card, outputDir: outputDir)
+        }
+    }
+
+    /// Adds concatenate jobs to queue (one per fully selected group)
+    private func addConcatenateJobsToQueue(card: P2Card, outputDir: URL) -> Bool {
+        let groups = fullySelectedGroups
+        guard !groups.isEmpty else {
+            errorMessage = "No groups fully selected for merging"
+            return false
+        }
+
+        guard !effectiveOutputFilename.isEmpty else {
+            errorMessage = "Please enter an output filename"
+            return false
+        }
+
+        let ext = settings.outputContainer.fileExtension
+        let queueManager = QueueManager.shared
+
+        for (index, group) in groups.enumerated() {
+            // Build output filename with numeric suffix if multiple groups
+            let suffix = groups.count > 1 ? String(format: "_%02d", index + 1) : ""
+            let outputName = "\(effectiveOutputFilename)\(suffix).\(ext)"
+            let outputURL = outputDir.appendingPathComponent(outputName)
+
+            queueManager.addJob(
+                cardName: card.name,
+                cardPath: card.rootPath,
+                clips: group.clips,
+                settings: settings,
+                destinationURL: outputURL
+            )
+        }
+
+        let jobCount = groups.count
+        queueFeedback = "Added \(jobCount) job\(jobCount == 1 ? "" : "s") to queue"
+
+        // Auto-clear after 3 seconds
+        Task {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            queueFeedback = nil
+        }
+
+        return true
+    }
+
+    /// Adds an individual files job to queue
+    private func addIndividualJobToQueue(card: P2Card, outputDir: URL) -> Bool {
+        let clips = sortedSelectedClips
+        guard !clips.isEmpty else {
+            errorMessage = "No clips selected"
+            return false
+        }
+
+        let queueManager = QueueManager.shared
+
+        // For individual mode, destination is the directory
+        queueManager.addJob(
+            cardName: card.name,
+            cardPath: card.rootPath,
+            clips: clips,
+            settings: settings,
+            destinationURL: outputDir
+        )
+
+        let clipCount = clips.count
+        queueFeedback = "Added job (\(clipCount) clip\(clipCount == 1 ? "" : "s")) to queue"
+
+        // Auto-clear after 3 seconds
+        Task {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            queueFeedback = nil
+        }
+
+        return true
+    }
+
+    /// Whether a job can be added to the queue (same validation as canConvert)
+    var canAddToQueue: Bool {
+        canConvert
     }
 }

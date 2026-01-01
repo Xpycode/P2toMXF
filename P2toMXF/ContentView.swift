@@ -3,9 +3,11 @@ import AppKit
 
 struct ContentView: View {
     @StateObject private var viewModel = ConversionViewModel()
+    @StateObject private var queueManager = QueueManager.shared
     @State private var showingP2Picker = false
     @State private var showingOutputPicker = false
     @State private var showConsole = true
+    @State private var showQueue = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,8 +25,14 @@ struct ContentView: View {
                 emptyStateView
             }
 
-            // Console output
-            if showConsole && !viewModel.consoleLog.isEmpty {
+            // Queue panel
+            if showQueue {
+                Divider()
+                QueueListView()
+            }
+
+            // Console output (now shows queue console when queue is active)
+            if showConsole {
                 Divider()
                 consoleView
             }
@@ -36,7 +44,7 @@ struct ContentView: View {
                 .padding()
                 .background(.ultraThinMaterial)
         }
-        .frame(minWidth: 850, minHeight: 500)
+        .frame(minWidth: 850, minHeight: 550)
         .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
             Button("OK") { viewModel.errorMessage = nil }
         } message: {
@@ -81,34 +89,77 @@ struct ContentView: View {
 
             Spacer()
 
-            // Right: Console toggle
-            Button {
-                showConsole.toggle()
-            } label: {
-                Label(showConsole ? "Hide Console" : "Show Console",
-                      systemImage: showConsole ? "terminal.fill" : "terminal")
+            // Right: Toggle buttons
+            HStack(spacing: 12) {
+                // Queue toggle
+                Button {
+                    showQueue.toggle()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: showQueue ? "list.bullet.rectangle.fill" : "list.bullet.rectangle")
+                        if queueManager.pendingCount > 0 {
+                            Text("\(queueManager.pendingCount)")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(Capsule().fill(.blue))
+                        }
+                    }
+                }
+                .help(showQueue ? "Hide queue panel" : "Show queue panel")
+
+                // Console toggle
+                Button {
+                    showConsole.toggle()
+                } label: {
+                    Image(systemName: showConsole ? "terminal.fill" : "terminal")
+                }
+                .help(showConsole ? "Hide console output" : "Show console output")
             }
-            .help(showConsole ? "Hide console output" : "Show console output")
         }
     }
 
     // MARK: - Console
 
+    /// Determines which console to show: queue (when processing) or local
+    private var activeConsoleLog: String {
+        if queueManager.isProcessing || !queueManager.consoleLog.isEmpty {
+            return queueManager.consoleLog
+        }
+        return viewModel.consoleLog
+    }
+
+    private var isShowingQueueConsole: Bool {
+        queueManager.isProcessing || !queueManager.consoleLog.isEmpty
+    }
+
     private var consoleView: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Console")
-                    .font(.caption.bold())
+                HStack(spacing: 6) {
+                    Text("Console")
+                        .font(.caption.bold())
+                    if isShowingQueueConsole {
+                        Text("(Queue)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 Spacer()
                 Button("Copy") {
                     NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(viewModel.consoleLog, forType: .string)
+                    NSPasteboard.general.setString(activeConsoleLog, forType: .string)
                 }
                 .buttonStyle(.plain)
                 .font(.caption)
                 .foregroundStyle(.blue)
                 Button("Clear") {
-                    viewModel.clearConsole()
+                    if isShowingQueueConsole {
+                        queueManager.clearConsole()
+                    } else {
+                        viewModel.clearConsole()
+                    }
                 }
                 .buttonStyle(.plain)
                 .font(.caption)
@@ -127,16 +178,16 @@ struct ContentView: View {
 
             ScrollViewReader { proxy in
                 ScrollView {
-                    Text(viewModel.consoleLog)
+                    Text(activeConsoleLog.isEmpty ? "No output yet" : activeConsoleLog)
                         .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(.green)
+                        .foregroundColor(activeConsoleLog.isEmpty ? Color.secondary : Color.green)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(8)
                         .id("bottom")
                 }
                 .frame(height: 120)
                 .background(Color.black.opacity(0.9))
-                .onChange(of: viewModel.consoleLog) { _, _ in
+                .onChange(of: activeConsoleLog) { _, _ in
                     proxy.scrollTo("bottom", anchor: .bottom)
                 }
             }
@@ -374,8 +425,16 @@ struct ContentView: View {
 
             Divider()
 
-            // Row 3: Action button
+            // Row 3: Action buttons
             HStack {
+                // Queue feedback message
+                if let feedback = viewModel.queueFeedback {
+                    Label(feedback, systemImage: "checkmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                        .transition(.opacity)
+                }
+
                 Spacer()
 
                 if viewModel.isConverting {
@@ -387,6 +446,17 @@ struct ContentView: View {
                     ProgressView()
                         .scaleEffect(0.7)
                 } else {
+                    // Add to Queue button
+                    Button {
+                        viewModel.addToQueue()
+                    } label: {
+                        Label("Add to Queue", systemImage: "plus.rectangle.on.rectangle")
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(!viewModel.canAddToQueue)
+                    .help("Add current selection to the batch queue")
+
+                    // Convert Now button
                     Button {
                         viewModel.startConversion()
                     } label: {
@@ -394,9 +464,11 @@ struct ContentView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(!viewModel.canConvert)
+                    .help("Start conversion immediately")
                 }
             }
         }
+        .animation(.easeInOut(duration: 0.2), value: viewModel.queueFeedback)
     }
 
     // MARK: - Helpers

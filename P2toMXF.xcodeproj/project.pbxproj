@@ -20,6 +20,8 @@
 		A01000008 /* ffmpeg in Resources */ = {isa = PBXBuildFile; fileRef = A0200000A /* ffmpeg */; };
 		A01000009 /* Credits.rtf in Resources */ = {isa = PBXBuildFile; fileRef = A0200000B /* Credits.rtf */; };
 		A0100000A /* ThumbnailManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0200000C /* ThumbnailManager.swift */; };
+		A0100000B /* QueueManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0200000D /* QueueManager.swift */; };
+		A0100000C /* QueueListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0200000E /* QueueListView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -38,6 +40,8 @@
 		A0200000A /* ffmpeg */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = ffmpeg; sourceTree = "<group>"; };
 		A0200000B /* Credits.rtf */ = {isa = PBXFileReference; lastKnownFileType = text.rtf; path = Credits.rtf; sourceTree = "<group>"; };
 		A0200000C /* ThumbnailManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbnailManager.swift; sourceTree = "<group>"; };
+		A0200000D /* QueueManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueueManager.swift; sourceTree = "<group>"; };
+		A0200000E /* QueueListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueueListView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -85,6 +89,7 @@
 				A02000007 /* ConversionViewModel.swift */,
 				A04000004 /* Models */,
 				A04000005 /* Services */,
+				A04000007 /* Views */,
 				A04000006 /* Resources */,
 				A02000003 /* Assets.xcassets */,
 				A02000009 /* P2toMXF.entitlements */,
@@ -116,8 +121,17 @@
 				A02000005 /* FFmpegWrapper.swift */,
 				23438BE22F067E0400ACE31E /* BMXWrapper.swift */,
 				A0200000C /* ThumbnailManager.swift */,
+				A0200000D /* QueueManager.swift */,
 			);
 			path = Services;
+			sourceTree = "<group>";
+		};
+		A04000007 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				A0200000E /* QueueListView.swift */,
+			);
+			path = Views;
 			sourceTree = "<group>";
 		};
 		A04000006 /* Resources */ = {
@@ -237,6 +251,8 @@
 				A01000006 /* P2Clip.swift in Sources */,
 				A01000007 /* ConversionViewModel.swift in Sources */,
 				A0100000A /* ThumbnailManager.swift in Sources */,
+				A0100000B /* QueueManager.swift in Sources */,
+				A0100000C /* QueueListView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

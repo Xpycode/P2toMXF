@@ -209,3 +209,100 @@ enum ConversionStatus: Equatable {
         }
     }
 }
+
+// MARK: - Batch Queue Models
+
+/// Status of a conversion job in the queue
+enum JobStatus: Equatable {
+    case pending       // Waiting in queue
+    case preparing     // Gathering files/rewrapping
+    case active        // FFmpeg is processing
+    case completed     // Successfully finished
+    case failed(String) // Error encountered
+    case cancelled     // User cancelled
+
+    var displayName: String {
+        switch self {
+        case .pending: return "Queued"
+        case .preparing: return "Preparing"
+        case .active: return "Converting"
+        case .completed: return "Completed"
+        case .failed: return "Failed"
+        case .cancelled: return "Cancelled"
+        }
+    }
+
+    var iconName: String {
+        switch self {
+        case .pending: return "clock"
+        case .preparing: return "gearshape.2"
+        case .active: return "arrow.triangle.2.circlepath"
+        case .completed: return "checkmark.circle.fill"
+        case .failed: return "xmark.circle.fill"
+        case .cancelled: return "stop.circle.fill"
+        }
+    }
+
+    var isFinished: Bool {
+        switch self {
+        case .completed, .failed, .cancelled: return true
+        default: return false
+        }
+    }
+}
+
+/// A single conversion job in the queue
+struct ConversionJob: Identifiable {
+    let id: UUID
+    let cardName: String          // Source P2 card name
+    let cardPath: URL             // For security-scoped access
+    let clips: [P2Clip]           // Clips to process
+    let settings: ConversionSettings
+    let destinationURL: URL       // Final output path (file or directory)
+    let createdAt: Date
+
+    var status: JobStatus = .pending
+    var progress: Double = 0.0    // 0.0 to 1.0
+
+    /// Display name for the job (uses output filename or card name)
+    var displayName: String {
+        if settings.processingMode == .individual {
+            return "\(cardName) (\(clips.count) clips)"
+        } else {
+            return destinationURL.deletingPathExtension().lastPathComponent
+        }
+    }
+
+    /// Expected output format
+    var outputFormat: String {
+        settings.outputContainer.rawValue
+    }
+
+    /// Total duration of all clips in frames
+    var totalDurationFrames: Int {
+        clips.reduce(0) { $0 + $1.durationFrames }
+    }
+
+    /// Human-readable duration
+    var formattedDuration: String {
+        guard let fps = clips.first?.frameRateDouble, fps > 0 else { return "--:--:--" }
+        let tc = Timecode.from(frames: totalDurationFrames, frameRate: fps)
+        return tc.description
+    }
+
+    init(
+        cardName: String,
+        cardPath: URL,
+        clips: [P2Clip],
+        settings: ConversionSettings,
+        destinationURL: URL
+    ) {
+        self.id = UUID()
+        self.cardName = cardName
+        self.cardPath = cardPath
+        self.clips = clips
+        self.settings = settings
+        self.destinationURL = destinationURL
+        self.createdAt = Date()
+    }
+}
