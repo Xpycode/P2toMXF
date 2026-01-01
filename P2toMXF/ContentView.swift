@@ -36,7 +36,7 @@ struct ContentView: View {
                 .padding()
                 .background(.ultraThinMaterial)
         }
-        .frame(minWidth: 600, minHeight: 500)
+        .frame(minWidth: 850, minHeight: 500)
         .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
             Button("OK") { viewModel.errorMessage = nil }
         } message: {
@@ -249,6 +249,17 @@ struct ContentView: View {
 
                             Text(".\(viewModel.settings.outputContainer.fileExtension)")
                                 .foregroundStyle(.secondary)
+
+                            // Button to use P2 card folder name
+                            if let cardName = viewModel.p2Card?.name {
+                                Button {
+                                    viewModel.settings.outputFilename = cardName
+                                } label: {
+                                    Image(systemName: "folder")
+                                }
+                                .buttonStyle(.borderless)
+                                .help("Use P2 card folder name: \(cardName)")
+                            }
                         }
                     }
                 }

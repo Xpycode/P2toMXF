@@ -50,14 +50,14 @@ struct P2Card: Identifiable {
 struct ConversionSettings {
     var outputDirectory: URL?
     var outputFilename: String = ""
-    var outputContainer: OutputContainer = .mov
+    var outputContainer: OutputContainer = .mxf
     var processingMode: ProcessingMode = .concatenate
     var preserveTimecode: Bool = true
     var audioMapping: AudioMapping = .allChannels
 
     enum OutputContainer: String, CaseIterable {
-        case mov = "MOV"
         case mxf = "MXF"
+        case mov = "MOV"
 
         var fileExtension: String { rawValue.lowercased() }
     }
