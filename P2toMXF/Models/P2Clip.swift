@@ -50,6 +50,7 @@ struct P2Card: Identifiable {
 struct ConversionSettings {
     var outputDirectory: URL?
     var outputFilename: String = ""
+    var useFolderNameAsFilename: Bool = false
     var outputContainer: OutputContainer = .mxf
     var processingMode: ProcessingMode = .concatenate
     var preserveTimecode: Bool = true

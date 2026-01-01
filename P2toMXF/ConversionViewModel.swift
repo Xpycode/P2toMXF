@@ -36,6 +36,14 @@ class ConversionViewModel: ObservableObject {
         selectedClips.count
     }
 
+    /// Effective output filename (considers useFolderNameAsFilename setting)
+    var effectiveOutputFilename: String {
+        if settings.useFolderNameAsFilename, let cardName = p2Card?.name {
+            return cardName
+        }
+        return settings.outputFilename
+    }
+
     var allClipsSelected: Bool {
         guard let card = p2Card else { return false }
         return selectedClips.count == card.clips.count
@@ -102,7 +110,7 @@ class ConversionViewModel: ObservableObject {
 
         switch settings.processingMode {
         case .concatenate:
-            return !settings.outputFilename.isEmpty && timecodeIssues.isEmpty
+            return !effectiveOutputFilename.isEmpty && timecodeIssues.isEmpty
         case .individual:
             return true
         }
@@ -179,7 +187,7 @@ class ConversionViewModel: ObservableObject {
     }
 
     private func startConcatenateConversion(clips: [P2Clip], outputDir: URL, ext: String) {
-        let outputName = "\(settings.outputFilename).\(ext)"
+        let outputName = "\(effectiveOutputFilename).\(ext)"
         let outputURL = outputDir.appendingPathComponent(outputName)
 
         log("Starting merge of \(clips.count) clips into single \(ext.uppercased())")

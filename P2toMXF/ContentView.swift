@@ -48,23 +48,6 @@ struct ContentView: View {
 
     private var headerView: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("P2 to MXF Converter")
-                    .font(.headline)
-
-                if let version = viewModel.ffmpegVersion {
-                    Text(version)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else if !viewModel.hasFFmpeg {
-                    Label("FFmpeg not found", systemImage: "exclamationmark.triangle")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                }
-            }
-
-            Spacer()
-
             Button {
                 showingP2Picker = true
             } label: {
@@ -78,6 +61,23 @@ struct ContentView: View {
                 if case .success(let urls) = result, let url = urls.first {
                     _ = url.startAccessingSecurityScopedResource()
                     viewModel.loadP2Card(from: url)
+                }
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("P2 to MXF Converter")
+                    .font(.headline)
+
+                if let version = viewModel.ffmpegVersion {
+                    Text(version)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else if !viewModel.hasFFmpeg {
+                    Label("FFmpeg not found", systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
                 }
             }
         }
@@ -202,30 +202,15 @@ struct ContentView: View {
     // MARK: - Footer
 
     private var footerView: some View {
-        VStack(spacing: 8) {
-            // Settings row
-            HStack(spacing: 16) {
-                // Processing mode picker
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Mode")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    Picker("", selection: $viewModel.settings.processingMode) {
-                        ForEach(ConversionSettings.ProcessingMode.allCases, id: \.self) { mode in
-                            Text(mode.rawValue).tag(mode)
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(width: 150)
-                }
-
-                // Container picker
-                VStack(alignment: .leading, spacing: 4) {
+        VStack(spacing: 12) {
+            // Row 1: Format, Mode, Audio, Preserve TC
+            HStack(spacing: 20) {
+                // Format picker
+                HStack(spacing: 8) {
                     Text("Format")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-
+                        .fixedSize()
                     Picker("", selection: $viewModel.settings.outputContainer) {
                         ForEach(ConversionSettings.OutputContainer.allCases, id: \.self) { container in
                             Text(container.rawValue).tag(container)
@@ -235,44 +220,27 @@ struct ContentView: View {
                     .frame(width: 70)
                 }
 
-                // Output filename (only in concatenate mode)
-                if viewModel.settings.processingMode == .concatenate {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Output Filename")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                        HStack(spacing: 4) {
-                            TextField("Enter filename", text: $viewModel.settings.outputFilename)
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 160)
-
-                            Text(".\(viewModel.settings.outputContainer.fileExtension)")
-                                .foregroundStyle(.secondary)
-
-                            // Button to use P2 card folder name
-                            if let cardName = viewModel.p2Card?.name {
-                                Button {
-                                    viewModel.settings.outputFilename = cardName
-                                } label: {
-                                    Image(systemName: "folder")
-                                }
-                                .buttonStyle(.borderless)
-                                .help("Use P2 card folder name: \(cardName)")
-                            }
+                // Mode picker
+                HStack(spacing: 8) {
+                    Text("Mode")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize()
+                    Picker("", selection: $viewModel.settings.processingMode) {
+                        ForEach(ConversionSettings.ProcessingMode.allCases, id: \.self) { mode in
+                            Text(mode.rawValue).tag(mode)
                         }
                     }
+                    .labelsHidden()
+                    .frame(width: 175)
                 }
 
-                Divider()
-                    .frame(height: 40)
-
-                // Audio settings
-                VStack(alignment: .leading, spacing: 4) {
+                // Audio picker
+                HStack(spacing: 8) {
                     Text("Audio")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-
+                        .fixedSize()
                     Picker("", selection: $viewModel.settings.audioMapping) {
                         ForEach(ConversionSettings.AudioMapping.allCases, id: \.self) { mapping in
                             Text(mapping.rawValue).tag(mapping)
@@ -282,8 +250,80 @@ struct ContentView: View {
                     .frame(width: 140)
                 }
 
+                // Preserve TC checkbox
                 Toggle("Preserve TC", isOn: $viewModel.settings.preserveTimecode)
                     .toggleStyle(.checkbox)
+
+                Spacer()
+            }
+
+            Divider()
+
+            // Row 2: Output Directory, Output Filename (in concatenate mode)
+            HStack(spacing: 20) {
+                // Output directory
+                HStack(spacing: 8) {
+                    Text("Output")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize()
+
+                    if let outputDir = viewModel.settings.outputDirectory {
+                        Text(outputDir.lastPathComponent)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .frame(maxWidth: 200, alignment: .leading)
+                    } else {
+                        Text("Not selected")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Button("Choose…") {
+                        showingOutputPicker = true
+                    }
+                    .controlSize(.small)
+                }
+                .fileImporter(
+                    isPresented: $showingOutputPicker,
+                    allowedContentTypes: [.folder],
+                    allowsMultipleSelection: false
+                ) { result in
+                    if case .success(let urls) = result, let url = urls.first {
+                        _ = url.startAccessingSecurityScopedResource()
+                        viewModel.settings.outputDirectory = url
+                    }
+                }
+
+                // Output filename (only in concatenate mode)
+                if viewModel.settings.processingMode == .concatenate {
+                    HStack(spacing: 8) {
+                        Text("Filename")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize()
+
+                        if viewModel.settings.useFolderNameAsFilename {
+                            Text(viewModel.p2Card?.name ?? "No card loaded")
+                                .frame(width: 180, alignment: .leading)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 4)
+                                .background(Color.secondary.opacity(0.1))
+                                .cornerRadius(5)
+                        } else {
+                            TextField("Enter filename", text: $viewModel.settings.outputFilename)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 180)
+                        }
+
+                        Text(".\(viewModel.settings.outputContainer.fileExtension)")
+                            .foregroundStyle(.secondary)
+                            .fixedSize()
+
+                        Toggle("Use folder name", isOn: $viewModel.settings.useFolderNameAsFilename)
+                            .toggleStyle(.checkbox)
+                            .fixedSize()
+                    }
+                }
 
                 Spacer()
             }
@@ -303,45 +343,10 @@ struct ContentView: View {
 
             Divider()
 
-            // Action row
-            HStack(spacing: 16) {
-                // Output directory
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Output Directory")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    HStack {
-                        if let outputDir = viewModel.settings.outputDirectory {
-                            Text(outputDir.lastPathComponent)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                        } else {
-                            Text("Not selected")
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Button("Choose...") {
-                            showingOutputPicker = true
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                    }
-                }
-                .fileImporter(
-                    isPresented: $showingOutputPicker,
-                    allowedContentTypes: [.folder],
-                    allowsMultipleSelection: false
-                ) { result in
-                    if case .success(let urls) = result, let url = urls.first {
-                        _ = url.startAccessingSecurityScopedResource()
-                        viewModel.settings.outputDirectory = url
-                    }
-                }
-
+            // Row 3: Action button
+            HStack {
                 Spacer()
 
-                // Convert button
                 if viewModel.isConverting {
                     Button("Cancel") {
                         viewModel.cancelConversion()
