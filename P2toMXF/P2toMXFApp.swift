@@ -6,6 +6,6 @@ struct P2toMXFApp: App {
         WindowGroup {
             ContentView()
         }
-        .defaultSize(width: 950, height: 600)
+        .defaultSize(width: 1200, height: 700)
     }
 }

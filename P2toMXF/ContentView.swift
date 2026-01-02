@@ -66,7 +66,7 @@ struct ContentView: View {
                 .padding()
                 .background(.ultraThinMaterial)
         }
-        .frame(minWidth: 950, minHeight: 600)
+        .frame(minWidth: 1150, minHeight: 600)
         .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
             Button("OK") { viewModel.errorMessage = nil }
         } message: {
