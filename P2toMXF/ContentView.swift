@@ -19,7 +19,7 @@ struct ContentView: View {
             Divider()
 
             // Three-column layout: Cards | Clips | Queue
-            HSplitView {
+            HStack(spacing: 0) {
                 // Left: Card list
                 CardListView(viewModel: viewModel, showingP2Picker: $showingP2Picker)
                     .fileImporter(
@@ -32,6 +32,8 @@ struct ContentView: View {
                             viewModel.loadP2Card(from: url)
                         }
                     }
+
+                Divider()
 
                 // Middle: Clip list for active card
                 VStack(spacing: 0) {
@@ -51,6 +53,7 @@ struct ContentView: View {
 
                 // Right: Queue panel
                 if showQueue {
+                    Divider()
                     QueueListView()
                         .frame(minWidth: 220, idealWidth: 280, maxWidth: 350)
                 }
@@ -650,18 +653,11 @@ struct ClipRowView: View {
                 Text(clip.displayName)
                     .font(.body.bold())
 
-                HStack(spacing: 8) {
-                    Label(clip.startTimecode.isEmpty ? "--:--:--:--" : clip.startTimecode,
-                          systemImage: "clock")
-                    Label(clip.formattedDuration, systemImage: "timer")
-                    Label(clip.videoCodec, systemImage: "film")
-                    Label("\(clip.audioChannels) ch", systemImage: "speaker.wave.2")
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                Text("\(clip.startTimecode.isEmpty ? "--:--:--:--" : clip.startTimecode) • \(clip.formattedDuration) • \(clip.videoCodec) • \(clip.audioChannels) ch")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-
-            Spacer()
+            .layoutPriority(1)
 
             // Conversion status
             if let status = status {

@@ -439,7 +439,15 @@ class VerificationService {
         progress: @escaping ProgressHandler,
         logHandler: @escaping LogHandler
     ) async throws -> ProcessDecodeResult {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<ProcessDecodeResult, Error>) in
+        // Thread-safe container for mutable state shared across Process callbacks
+        final class DecodeState: @unchecked Sendable {
+            var lastFrameCount = 0
+            var lastSpeed: String?
+            var errorOutput = ""
+        }
+        let state = DecodeState()
+
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<ProcessDecodeResult, Error>) in
             let process = Process()
             process.executableURL = executable
             process.arguments = arguments
@@ -448,15 +456,11 @@ class VerificationService {
             process.standardOutput = FileHandle.nullDevice
             process.standardError = errorPipe
 
-            var lastFrameCount = 0
-            var lastSpeed: String?
-            var errorOutput = ""
-
-            errorPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
+            errorPipe.fileHandleForReading.readabilityHandler = { [weak self, state] handle in
                 let data = handle.availableData
                 guard let str = String(data: data, encoding: .utf8), !str.isEmpty else { return }
 
-                errorOutput += str
+                state.errorOutput += str
 
                 // Parse frame count and speed from FFmpeg output
                 // Format: "frame=  123 fps= 45.6 ... speed=12.3x"
@@ -465,7 +469,7 @@ class VerificationService {
                         .replacingOccurrences(of: "frame=", with: "")
                         .trimmingCharacters(in: .whitespaces)
                     if let frame = Int(frameStr) {
-                        lastFrameCount = frame
+                        state.lastFrameCount = frame
 
                         let currentProgress: Double
                         if expectedFrames > 0 {
@@ -480,7 +484,7 @@ class VerificationService {
                                 .replacingOccurrences(of: "speed=", with: "")
                                 .trimmingCharacters(in: .whitespaces)
                             if speedStr != "N/A" {
-                                lastSpeed = speedStr
+                                state.lastSpeed = speedStr
                             }
                         }
 
@@ -488,7 +492,7 @@ class VerificationService {
                         if expectedFrames > 0 {
                             statusParts[0] = "Frame \(frame)/\(expectedFrames)"
                         }
-                        if let speed = lastSpeed {
+                        if let speed = state.lastSpeed {
                             statusParts.append(speed)
                         }
 
@@ -504,15 +508,15 @@ class VerificationService {
                 }
             }
 
-            process.terminationHandler = { [weak self] proc in
+            process.terminationHandler = { [weak self, state] proc in
                 errorPipe.fileHandleForReading.readabilityHandler = nil
 
                 let wasCancelled = self?.isCancelling ?? false
 
                 if proc.terminationStatus == 0 {
                     continuation.resume(returning: ProcessDecodeResult(
-                        frames: lastFrameCount,
-                        speed: lastSpeed
+                        frames: state.lastFrameCount,
+                        speed: state.lastSpeed
                     ))
                 } else if wasCancelled {
                     continuation.resume(throwing: VerificationError.cancelled)

@@ -6,7 +6,6 @@ struct P2toMXFApp: App {
         WindowGroup {
             ContentView()
         }
-        .windowStyle(.hiddenTitleBar)
-        .defaultSize(width: 700, height: 500)
+        .defaultSize(width: 950, height: 600)
     }
 }
