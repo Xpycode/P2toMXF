@@ -245,6 +245,7 @@ codesign --force --sign - bmxtranswrap mxf2raw lib/*.dylib
    - Option B: Xcode build phase that downloads if missing
    - Option C: Git LFS for large file storage
 7. ~~**Multi-job queueing**: Queue multiple conversion tasks and execute sequentially~~ ✓ Done
+8. ~~**Output verification**: Verify converted files decode correctly~~ ✓ Done
 
 ---
 
@@ -565,3 +566,196 @@ func addJob(_ job: ConversionJob, autoStart: Bool = false)
 - `ConversionViewModel.swift` - `addToQueue(autoStart:)` parameter
 - `ContentView.swift` - Context-aware primary action button
 - `Views/QueueListView.swift` - Added "Start" button in queue controls
+
+---
+
+## Session Log: 2026-01-01 (Video Verification)
+
+### Overview
+Added output file verification to ensure converted MXF/MOV files are correctly playable. Uses FFmpeg to perform container validation and full decode tests.
+
+### Verification Modes
+
+#### Quick Mode (~5 seconds)
+- Container structure check using ffprobe
+- Decode first 5 seconds
+- Decode last 5 seconds
+- Fast sanity check for most common issues
+
+#### Full Mode (faster than realtime)
+- Complete frame-by-frame decode test
+- Uses VideoToolbox hardware acceleration when available
+- Verifies frame count matches expected
+- Catches bitstream errors, truncation, corruption
+
+### New Data Structures
+
+#### VerificationStatus Enum (P2Clip.swift)
+```swift
+enum VerificationStatus: Equatable, Codable {
+    case unverified       // Not yet verified
+    case verifying        // Currently running verification
+    case verified         // Passed verification
+    case failed(String)   // Failed with error message
+}
+```
+
+#### VerificationResult Struct (P2Clip.swift)
+```swift
+struct VerificationResult: Codable {
+    let fileURL: URL
+    let passed: Bool
+    let mode: VerificationMode
+    let duration: TimeInterval
+    let framesDecoded: Int?
+    let totalFrames: Int?
+    let decodingSpeed: String?     // e.g., "45.2x"
+    let containerValid: Bool
+    let errorMessage: String?
+    let verifiedAt: Date
+}
+```
+
+### VerificationService (Services/VerificationService.swift)
+Standalone service for file verification:
+- **Container Validation**: Uses ffprobe to check MXF/MOV structure
+- **Decode Testing**: FFmpeg decode to null output (`-f null -`)
+- **Hardware Acceleration**: VideoToolbox for faster decode
+- **Progress Reporting**: Frame-by-frame progress with speed metrics
+- **Cancellation Support**: Can stop verification mid-process
+
+### QueueManager Integration
+Added verification methods:
+```swift
+func verifyJob(_ jobId: UUID, mode: VerificationMode)
+func verifyAllCompleted(mode: VerificationMode)
+func cancelVerification()
+```
+
+### UI Features (QueueListView.swift)
+
+#### Per-Job Verification
+- Completed jobs show verify button (seal icon)
+- Menu with Quick/Full options
+- Progress bar during verification
+- Status icons: ✓ Verified (green seal), ✗ Failed (red seal)
+- Tooltip shows verification summary
+
+#### Batch Verification
+- "Verify All" button in queue controls
+- Processes all unverified completed jobs
+- Shows count badge
+
+#### Status Indicators
+- Orange highlight during verification
+- Header shows "Verifying..." when active
+- "Stop Verify" button to cancel
+
+### Files Created
+- `Services/VerificationService.swift` - Verification engine
+
+### Files Modified
+- `Models/P2Clip.swift` - Added `VerificationStatus`, `VerificationResult`, `VerificationMode`
+- `Services/QueueManager.swift` - Verification integration, `isVerifying` state
+- `Views/QueueListView.swift` - Verification UI controls and status display
+
+---
+
+## Session Log: 2026-01-01 (Time Estimation & Speed Tracking)
+
+### Overview
+Added conversion time estimation based on historical speed data, with slow speed warnings during conversion.
+
+### Features
+
+#### Time Estimation
+- **Pre-conversion estimates**: Shows expected time before starting
+- **Historical tracking**: Records conversion speeds for accurate predictions
+- **Confidence levels**: High (recent data), Medium (historical), Low (defaults)
+- **Queue totals**: Shows total estimated time for all pending jobs
+
+#### Speed Tracking
+- Persists last 50 conversion records to `~/Library/Application Support/P2toMXF/speed_records.json`
+- Tracks: bytes processed, duration, realtime multiplier, format, mode
+- Filters by matching settings for relevant estimates
+
+#### Slow Speed Warning
+- Detects when speed drops below 30% of expected
+- Shows banner with current vs expected speed
+- Estimates remaining time at current rate
+- Attempts to diagnose reason (network storage, external drive, etc.)
+
+### New Data Structures
+
+#### ConversionEstimate (P2Clip.swift)
+```swift
+struct ConversionEstimate {
+    let totalBytes: Int64
+    let totalDurationSeconds: Double
+    let clipCount: Int
+    let estimatedSeconds: TimeInterval
+    let speedMultiplier: Double       // e.g., 30.0 means 30x realtime
+    let confidence: EstimateConfidence
+}
+```
+
+#### ConversionSpeedRecord (P2Clip.swift)
+```swift
+struct ConversionSpeedRecord: Codable {
+    let date: Date
+    let bytesProcessed: Int64
+    let durationSeconds: TimeInterval
+    let speedMultiplier: Double
+    let processingMode: ProcessingMode
+    let outputFormat: OutputContainer
+}
+```
+
+#### SlowSpeedWarning (P2Clip.swift)
+```swift
+struct SlowSpeedWarning {
+    let currentSpeed: Double
+    let expectedSpeed: Double
+    let estimatedRemaining: TimeInterval
+    let reason: SlowSpeedReason  // slowDisk, externalDrive, networkStorage, etc.
+}
+```
+
+### SpeedTracker Service (Services/SpeedTracker.swift)
+- **Singleton**: `SpeedTracker.shared`
+- **recordConversion()**: Saves speed data after each job
+- **estimateConversion()**: Predicts time based on history
+- **checkSpeed()**: Detects slow speeds during conversion
+
+### UI Components (Views/EstimateSheet.swift)
+
+#### EstimateSheet
+Pre-conversion dialog showing:
+- Source info (clips, size, duration)
+- Estimated time with speed multiplier
+- Confidence indicator
+- Start/Cancel buttons
+
+#### SlowSpeedBanner
+In-conversion warning showing:
+- Current vs expected speed
+- Remaining time estimate
+- Dismiss button
+
+#### QueueEstimateBadge
+Compact estimate display for pending jobs in queue list
+
+### Queue Integration
+- Pending jobs show estimate badge
+- Queue header shows total estimated time
+- Processing jobs show current estimate
+- Slow speed banner appears in queue panel
+
+### Files Created
+- `Services/SpeedTracker.swift` - Speed tracking and estimation
+- `Views/EstimateSheet.swift` - Estimate dialog and warning views
+
+### Files Modified
+- `Models/P2Clip.swift` - Added estimation models, `totalFileSize` computed property
+- `Services/QueueManager.swift` - Integration with SpeedTracker, estimate methods
+- `Views/QueueListView.swift` - Estimate badges, slow speed banner, header estimates

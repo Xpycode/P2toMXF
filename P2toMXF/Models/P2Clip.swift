@@ -61,6 +61,26 @@ struct P2Clip: Identifiable, Hashable, Codable {
         clipName.isEmpty ? globalClipID : clipName
     }
 
+    /// Total file size of all source files (video + audio) in bytes
+    var totalFileSize: Int64 {
+        let fm = FileManager.default
+        var total: Int64 = 0
+
+        for file in videoFiles {
+            if let attrs = try? fm.attributesOfItem(atPath: file.path),
+               let size = attrs[.size] as? Int64 {
+                total += size
+            }
+        }
+        for file in audioFiles {
+            if let attrs = try? fm.attributesOfItem(atPath: file.path),
+               let size = attrs[.size] as? Int64 {
+                total += size
+            }
+        }
+        return total
+    }
+
     /// Frame rate as Double for calculations
     var frameRateDouble: Double {
         Double(frameRate) ?? 25.0
@@ -376,6 +396,246 @@ enum ConversionStatus: Equatable {
     }
 }
 
+// MARK: - Verification Models
+
+/// Verification mode options
+enum VerificationMode: String, CaseIterable, Codable {
+    case quick = "Quick"
+    case full = "Full"
+
+    var description: String {
+        switch self {
+        case .quick: return "Container + first/last 5 seconds"
+        case .full: return "Decode every frame"
+        }
+    }
+}
+
+/// Status of file verification
+enum VerificationStatus: Equatable, Codable {
+    case unverified       // Not yet verified
+    case verifying        // Currently running verification
+    case verified         // Passed verification
+    case failed(String)   // Failed with error message
+
+    var displayName: String {
+        switch self {
+        case .unverified: return "Not Verified"
+        case .verifying: return "Verifying..."
+        case .verified: return "Verified"
+        case .failed: return "Failed"
+        }
+    }
+
+    var iconName: String {
+        switch self {
+        case .unverified: return "questionmark.circle"
+        case .verifying: return "arrow.triangle.2.circlepath"
+        case .verified: return "checkmark.seal.fill"
+        case .failed: return "xmark.seal.fill"
+        }
+    }
+
+    var isFinished: Bool {
+        switch self {
+        case .verified, .failed: return true
+        default: return false
+        }
+    }
+
+    // MARK: - Codable (custom for associated value)
+
+    private enum CodingKeys: String, CodingKey {
+        case type, errorMessage
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(String.self, forKey: .type)
+
+        switch type {
+        case "unverified": self = .unverified
+        case "verifying": self = .verifying
+        case "verified": self = .verified
+        case "failed":
+            let message = try container.decode(String.self, forKey: .errorMessage)
+            self = .failed(message)
+        default: self = .unverified
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+
+        switch self {
+        case .unverified: try container.encode("unverified", forKey: .type)
+        case .verifying: try container.encode("verifying", forKey: .type)
+        case .verified: try container.encode("verified", forKey: .type)
+        case .failed(let message):
+            try container.encode("failed", forKey: .type)
+            try container.encode(message, forKey: .errorMessage)
+        }
+    }
+}
+
+/// Detailed results from verification
+struct VerificationResult: Codable {
+    let fileURL: URL
+    let passed: Bool
+    let mode: VerificationMode
+    let duration: TimeInterval         // How long verification took
+    let framesDecoded: Int?            // Number of frames successfully decoded
+    let totalFrames: Int?              // Expected total frames
+    let decodingSpeed: String?         // e.g., "45.2x"
+    let containerValid: Bool           // MXF/MOV structure is valid
+    let errorMessage: String?          // If failed, what went wrong
+    let verifiedAt: Date
+
+    var summary: String {
+        if passed {
+            var parts = ["✓ Verified"]
+            if let frames = framesDecoded {
+                parts.append("\(frames) frames")
+            }
+            if let speed = decodingSpeed {
+                parts.append(speed)
+            }
+            parts.append(String(format: "%.1fs", duration))
+            return parts.joined(separator: " • ")
+        } else {
+            return "✗ Failed: \(errorMessage ?? "Unknown error")"
+        }
+    }
+}
+
+// MARK: - Time Estimation Models
+
+/// Estimated time for a conversion job
+struct ConversionEstimate {
+    let totalBytes: Int64
+    let totalDurationSeconds: Double
+    let clipCount: Int
+    let estimatedSeconds: TimeInterval
+    let speedMultiplier: Double       // e.g., 30.0 means 30x realtime
+    let confidence: EstimateConfidence
+
+    /// Formatted total size (e.g., "42.3 GB")
+    var formattedSize: String {
+        ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file)
+    }
+
+    /// Formatted duration of source content (e.g., "1:23:45")
+    var formattedSourceDuration: String {
+        formatTimeInterval(totalDurationSeconds)
+    }
+
+    /// Formatted estimated time (e.g., "~3 min")
+    var formattedEstimate: String {
+        if estimatedSeconds < 60 {
+            return "< 1 min"
+        } else if estimatedSeconds < 3600 {
+            let mins = Int(estimatedSeconds / 60)
+            return "~\(mins) min"
+        } else {
+            let hours = Int(estimatedSeconds / 3600)
+            let mins = Int((estimatedSeconds.truncatingRemainder(dividingBy: 3600)) / 60)
+            return "~\(hours)h \(mins)m"
+        }
+    }
+
+    /// Formatted speed (e.g., "30x realtime")
+    var formattedSpeed: String {
+        String(format: "%.0fx realtime", speedMultiplier)
+    }
+
+    private func formatTimeInterval(_ interval: TimeInterval) -> String {
+        let hours = Int(interval) / 3600
+        let minutes = (Int(interval) % 3600) / 60
+        let seconds = Int(interval) % 60
+
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            return String(format: "%d:%02d", minutes, seconds)
+        }
+    }
+}
+
+/// Confidence level in the time estimate
+enum EstimateConfidence: String {
+    case high = "Based on recent conversions"
+    case medium = "Based on historical average"
+    case low = "Using default estimate"
+
+    var icon: String {
+        switch self {
+        case .high: return "checkmark.circle.fill"
+        case .medium: return "circle.fill"
+        case .low: return "questionmark.circle"
+        }
+    }
+}
+
+/// Record of a completed conversion for speed tracking
+struct ConversionSpeedRecord: Codable {
+    let date: Date
+    let bytesProcessed: Int64
+    let durationSeconds: TimeInterval
+    let speedMultiplier: Double        // Realtime multiplier (e.g., 30.0 for 30x)
+    let processingMode: ConversionSettings.ProcessingMode
+    let outputFormat: ConversionSettings.OutputContainer
+
+    /// Throughput in bytes per second
+    var bytesPerSecond: Double {
+        guard durationSeconds > 0 else { return 0 }
+        return Double(bytesProcessed) / durationSeconds
+    }
+}
+
+/// Slow speed warning threshold and data
+struct SlowSpeedWarning {
+    let currentSpeed: Double          // Current realtime multiplier
+    let expectedSpeed: Double         // Expected based on history
+    let estimatedRemaining: TimeInterval
+    let reason: SlowSpeedReason
+
+    var message: String {
+        switch reason {
+        case .slowDisk:
+            return "Slow disk speed detected"
+        case .externalDrive:
+            return "External drive may be slow"
+        case .networkStorage:
+            return "Network storage latency"
+        case .systemLoad:
+            return "High system activity"
+        case .unknown:
+            return "Slower than expected"
+        }
+    }
+
+    var formattedRemaining: String {
+        if estimatedRemaining < 60 {
+            return "< 1 min remaining"
+        } else if estimatedRemaining < 3600 {
+            let mins = Int(estimatedRemaining / 60)
+            return "~\(mins) min remaining"
+        } else {
+            let hours = Int(estimatedRemaining / 3600)
+            let mins = Int((estimatedRemaining.truncatingRemainder(dividingBy: 3600)) / 60)
+            return "~\(hours)h \(mins)m remaining"
+        }
+    }
+}
+
+enum SlowSpeedReason {
+    case slowDisk
+    case externalDrive
+    case networkStorage
+    case systemLoad
+    case unknown
+}
+
 // MARK: - Batch Queue Models
 
 /// Status of a conversion job in the queue
@@ -469,6 +729,11 @@ struct ConversionJob: Identifiable, Codable {
     var progress: Double = 0.0    // 0.0 to 1.0
     var startedAt: Date?          // When processing started (for elapsed time)
 
+    // Verification state
+    var verificationStatus: VerificationStatus = .unverified
+    var verificationResult: VerificationResult?
+    var verificationProgress: Double = 0.0  // 0.0 to 1.0
+
     // URL accessors
     var cardPath: URL { URL(fileURLWithPath: cardPathString) }
     var destinationURL: URL { URL(fileURLWithPath: destinationPathString) }
@@ -519,5 +784,6 @@ struct ConversionJob: Identifiable, Codable {
     enum CodingKeys: String, CodingKey {
         case id, cardName, cardPathString, clips, settings
         case destinationPathString, createdAt, status, progress, startedAt
+        case verificationStatus, verificationResult, verificationProgress
     }
 }
