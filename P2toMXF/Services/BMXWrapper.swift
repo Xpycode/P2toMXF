@@ -151,7 +151,16 @@ class BMXWrapper {
         return rewrappedFiles
     }
 
-    /// Thread-safe container for collecting process output
+    /// Thread-safe container for collecting process output.
+    ///
+    /// # Threading Contract
+    /// This class is marked `@unchecked Sendable` because it manually implements
+    /// thread-safety using `NSLock`:
+    /// - `append(_:)` and `output` are synchronized via the internal lock
+    /// - Safe to call from any thread or dispatch queue
+    /// - All mutable state (`_output`) is protected by the lock
+    ///
+    /// **Warning:** Do not add properties without updating lock usage.
     private final class OutputCollector: @unchecked Sendable {
         private let lock = NSLock()
         private var _output = ""
@@ -252,6 +261,9 @@ class BMXWrapper {
                     logHandler("BMX started with PID: \(process.processIdentifier)")
                 }
             } catch {
+                // Clean up file handle handlers if process fails to start
+                outputPipe.fileHandleForReading.readabilityHandler = nil
+                errorPipe.fileHandleForReading.readabilityHandler = nil
                 DispatchQueue.main.async {
                     logHandler("Failed to start BMX: \(error.localizedDescription)")
                 }

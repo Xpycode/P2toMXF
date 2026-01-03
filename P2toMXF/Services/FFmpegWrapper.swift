@@ -445,7 +445,9 @@ class FFmpegWrapper {
         let concatFile = tempDir.appendingPathComponent("concat_list.txt")
         var concatContent = ""
         for file in rewrappedFiles {
-            concatContent += "file '\(file.path)'\n"
+            // Escape single quotes for FFmpeg concat list format (replace ' with '\'' )
+            let escapedPath = file.path.replacingOccurrences(of: "'", with: "'\\''")
+            concatContent += "file '\(escapedPath)'\n"
         }
         try concatContent.write(to: concatFile, atomically: true, encoding: .utf8)
         logHandler("Concat list: \(rewrappedFiles.count) files")
@@ -553,7 +555,16 @@ class FFmpegWrapper {
         return metrics
     }
 
-    /// Thread-safe container for collecting FFmpeg stderr output
+    /// Thread-safe container for collecting FFmpeg stderr output.
+    ///
+    /// # Threading Contract
+    /// This class is marked `@unchecked Sendable` because it manually implements
+    /// thread-safety using `NSLock`:
+    /// - `append(_:)` and `output` are synchronized via the internal lock
+    /// - Safe to call from any thread or dispatch queue
+    /// - All mutable state (`_output`) is protected by the lock
+    ///
+    /// **Warning:** Do not add properties without updating lock usage.
     private final class OutputCollector: @unchecked Sendable {
         private let lock = NSLock()
         private var _output = ""
@@ -698,6 +709,9 @@ class FFmpegWrapper {
                     logHandler("Process started with PID: \(process.processIdentifier)")
                 }
             } catch {
+                // Clean up file handle handlers if process fails to start
+                outputPipe.fileHandleForReading.readabilityHandler = nil
+                errorPipe.fileHandleForReading.readabilityHandler = nil
                 DispatchQueue.main.async {
                     logHandler("Failed to start process: \(error.localizedDescription)")
                 }

@@ -7,7 +7,7 @@ import IOKit.pwr_mgt
 @MainActor
 class QueueManager: ObservableObject {
     // MARK: - Shared Instance
-    static let shared = QueueManager()
+    @MainActor static let shared = QueueManager()
 
     // MARK: - Published State
     @Published private(set) var jobs: [ConversionJob] = []
@@ -22,6 +22,8 @@ class QueueManager: ObservableObject {
     private var currentVerificationJobId: UUID?
     private var sleepAssertionID: IOPMAssertionID = 0
     private var isSleepPrevented = false
+    /// Tracks URLs that currently have active security-scoped access
+    private var accessedSecurityScopedResources: Set<URL> = []
     @Published private(set) var isVerifying = false
     @Published private(set) var slowSpeedWarning: SlowSpeedWarning?
     @Published private(set) var currentJobEstimate: ConversionEstimate?
@@ -209,6 +211,40 @@ class QueueManager: ObservableObject {
         isSleepPrevented = false
         sleepAssertionID = 0
         log("Sleep prevention disabled")
+    }
+
+    // MARK: - Security-Scoped Resource Management
+
+    /// Starts accessing a security-scoped resource if not already accessed
+    /// - Returns: true if access was granted (or already active), false if denied
+    private func startAccessingIfNeeded(_ url: URL) -> Bool {
+        // Normalize the URL to avoid duplicates with different representations
+        let standardizedURL = url.standardizedFileURL
+        guard !accessedSecurityScopedResources.contains(standardizedURL) else {
+            return true  // Already accessing
+        }
+        if standardizedURL.startAccessingSecurityScopedResource() {
+            accessedSecurityScopedResources.insert(standardizedURL)
+            return true
+        }
+        return false
+    }
+
+    /// Stops accessing a specific security-scoped resource
+    private func stopAccessingIfNeeded(_ url: URL) {
+        let standardizedURL = url.standardizedFileURL
+        if accessedSecurityScopedResources.contains(standardizedURL) {
+            standardizedURL.stopAccessingSecurityScopedResource()
+            accessedSecurityScopedResources.remove(standardizedURL)
+        }
+    }
+
+    /// Stops accessing all currently accessed security-scoped resources
+    private func stopAccessingAllResources() {
+        for url in accessedSecurityScopedResources {
+            url.stopAccessingSecurityScopedResource()
+        }
+        accessedSecurityScopedResources.removeAll()
     }
 
     // MARK: - Filename Conflict Resolution
@@ -416,6 +452,45 @@ class QueueManager: ObservableObject {
         speedTracker.clearSpeedWarning()
     }
 
+    /// Checks current conversion speed and sets warning if significantly slow
+    /// - Parameters:
+    ///   - metrics: Current progress metrics from FFmpeg
+    ///   - totalBytes: Total bytes being processed
+    ///   - totalDuration: Total content duration in seconds
+    ///   - outputPath: Output file path (for slow speed reason detection)
+    private func checkForSlowSpeed(
+        metrics: ProgressMetrics,
+        totalBytes: Int64,
+        totalDuration: Double,
+        outputPath: URL
+    ) {
+        // Parse speed multiplier from string like "12.5x"
+        guard let speedStr = metrics.speed,
+              let speedValue = Double(speedStr.replacingOccurrences(of: "x", with: "")) else {
+            return
+        }
+
+        // Calculate remaining content based on progress
+        let remainingProgress = 1.0 - metrics.progress
+        let bytesRemaining = Int64(Double(totalBytes) * remainingProgress)
+        let durationRemaining = totalDuration * remainingProgress
+
+        // Check for slow speed (only after initial 10% to avoid false positives during startup)
+        guard metrics.progress > 0.1 else { return }
+
+        if let warning = speedTracker.checkSpeed(
+            currentSpeedMultiplier: speedValue,
+            bytesRemaining: bytesRemaining,
+            contentDurationRemaining: durationRemaining,
+            outputPath: outputPath
+        ) {
+            slowSpeedWarning = warning
+        } else {
+            // Clear warning if speed has recovered
+            slowSpeedWarning = nil
+        }
+    }
+
     // MARK: - Queue Processing
 
     /// Main loop that processes jobs sequentially
@@ -476,15 +551,15 @@ class QueueManager: ObservableObject {
             outputDirURL = job.destinationURL.deletingLastPathComponent()
         }
 
-        // Start security-scoped access to the card and output directory
-        let cardAccessGranted = cardURL.startAccessingSecurityScopedResource()
-        let outputAccessGranted = outputDirURL.startAccessingSecurityScopedResource()
+        // Start security-scoped access using balanced tracking to prevent nested start/stop issues
+        let cardAccessGranted = startAccessingIfNeeded(cardURL)
+        let outputAccessGranted = startAccessingIfNeeded(outputDirURL)
         defer {
             if cardAccessGranted {
-                cardURL.stopAccessingSecurityScopedResource()
+                stopAccessingIfNeeded(cardURL)
             }
             if outputAccessGranted {
-                outputDirURL.stopAccessingSecurityScopedResource()
+                stopAccessingIfNeeded(outputDirURL)
             }
         }
 
@@ -541,6 +616,10 @@ class QueueManager: ObservableObject {
 
     /// Processes a concatenation job (multiple clips -> single file)
     private func processConcatenateJob(_ job: ConversionJob, index: Int) async throws {
+        let totalBytes = job.clips.reduce(Int64(0)) { $0 + $1.totalFileSize }
+        let fps = job.clips.first?.frameRateDouble ?? 25.0
+        let totalDuration = Double(job.totalDurationFrames) / fps
+
         try await ffmpeg.mergeClips(
             job.clips,
             to: job.destinationURL,
@@ -553,6 +632,15 @@ class QueueManager: ObservableObject {
             Task { @MainActor in
                 self?.log(message)
             }
+        } metricsHandler: { [weak self] metrics in
+            Task { @MainActor in
+                self?.checkForSlowSpeed(
+                    metrics: metrics,
+                    totalBytes: totalBytes,
+                    totalDuration: totalDuration,
+                    outputPath: job.destinationURL
+                )
+            }
         }
     }
 
@@ -561,13 +649,20 @@ class QueueManager: ObservableObject {
         let outputDir = job.destinationURL
         let ext = job.settings.outputContainer.fileExtension
 
+        // Calculate totals for slow speed detection
+        let totalBytes = job.clips.reduce(Int64(0)) { $0 + $1.totalFileSize }
+        let fps = job.clips.first?.frameRateDouble ?? 25.0
+        let totalDuration = Double(job.totalDurationFrames) / fps
+
         for (clipIndex, clip) in job.clips.enumerated() {
             // Check if job was cancelled
             guard jobs[index].status == .active else {
                 throw NSError(domain: "QueueManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Job cancelled"])
             }
 
-            let clipOutputURL = outputDir.appendingPathComponent("\(clip.displayName).\(ext)")
+            // Resolve filename conflicts for individual clip outputs
+            var clipOutputURL = outputDir.appendingPathComponent("\(clip.displayName).\(ext)")
+            clipOutputURL = resolveFilenameConflict(for: clipOutputURL)
             log("[\(clipIndex + 1)/\(job.clips.count)] Converting \(clip.displayName)...")
 
             try await ffmpeg.rewrapSingleClip(
@@ -585,6 +680,21 @@ class QueueManager: ObservableObject {
             } logHandler: { [weak self] message in
                 Task { @MainActor in
                     self?.log(message)
+                }
+            } metricsHandler: { [weak self] metrics in
+                Task { @MainActor in
+                    // Adjust metrics progress to account for multi-clip processing
+                    var adjustedMetrics = metrics
+                    let baseProgress = Double(clipIndex) / Double(job.clips.count)
+                    let clipContribution = metrics.progress / Double(job.clips.count)
+                    adjustedMetrics.progress = baseProgress + clipContribution
+
+                    self?.checkForSlowSpeed(
+                        metrics: adjustedMetrics,
+                        totalBytes: totalBytes,
+                        totalDuration: totalDuration,
+                        outputPath: clipOutputURL
+                    )
                 }
             }
 

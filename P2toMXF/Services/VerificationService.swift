@@ -439,7 +439,17 @@ class VerificationService {
         progress: @escaping ProgressHandler,
         logHandler: @escaping LogHandler
     ) async throws -> ProcessDecodeResult {
-        // Thread-safe container for mutable state shared across Process callbacks
+        /// Thread-safe container for mutable state shared across Process callbacks.
+        ///
+        /// # Threading Contract
+        /// This class is marked `@unchecked Sendable` because it's designed for
+        /// single-writer semantics within the decode process context:
+        /// - Only the `readabilityHandler` closure writes to properties
+        /// - The `terminationHandler` reads after the readabilityHandler is cleared
+        /// - No concurrent write access occurs in practice
+        ///
+        /// **Note:** While not using explicit locks, the sequential nature of
+        /// pipe reading and process termination provides implicit synchronization.
         final class DecodeState: @unchecked Sendable {
             var lastFrameCount = 0
             var lastSpeed: String?
