@@ -232,6 +232,8 @@ struct ConversionSettings: Codable {
     var processingMode: ProcessingMode = .concatenate
     var preserveTimecode: Bool = true
     var audioMapping: AudioMapping = .allChannels
+    var generateReport: Bool = true
+    var includeChecksum: Bool = false
 
     /// Output directory URL for converted files (not encoded directly, derived from path)
     var outputDirectory: URL? {
@@ -267,6 +269,8 @@ struct ConversionSettings: Codable {
         case processingMode
         case preserveTimecode
         case audioMapping
+        case generateReport
+        case includeChecksum
     }
 }
 

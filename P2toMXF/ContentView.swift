@@ -9,7 +9,7 @@ struct ContentView: View {
     @StateObject private var queueManager = QueueManager.shared
     @State private var showingP2Picker = false
     @State private var showingOutputPicker = false
-    @State private var showConsole = true
+    @State private var showConsole = false
     @State private var showQueue = true
 
     var body: some View {

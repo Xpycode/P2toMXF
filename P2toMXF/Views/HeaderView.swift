@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 // MARK: - Header View
 
@@ -37,8 +38,28 @@ struct HeaderView: View {
 
             Spacer()
 
-            // Right: Toggle buttons
+            // Right: Action and toggle buttons
             HStack(spacing: 12) {
+                // Refresh active card
+                Button {
+                    viewModel.refreshActiveCard()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .disabled(viewModel.activeCard == nil || viewModel.isLoading)
+                .help("Reload P2 card from disk")
+
+                // Open output folder
+                Button {
+                    if let outputDir = viewModel.settings.outputDirectory {
+                        NSWorkspace.shared.open(outputDir)
+                    }
+                } label: {
+                    Image(systemName: "folder")
+                }
+                .disabled(viewModel.settings.outputDirectory == nil)
+                .help("Open output folder in Finder")
+
                 // Queue toggle
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {

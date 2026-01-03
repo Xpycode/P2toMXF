@@ -33,6 +33,7 @@
 		A01000015 /* FooterControlsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000017 /* FooterControlsView.swift */; };
 		A01000016 /* ClipRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000018 /* ClipRowView.swift */; };
 		A01000017 /* JobRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000019 /* JobRowView.swift */; };
+		A01000018 /* ReportGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0200001A /* ReportGenerator.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -64,6 +65,7 @@
 		A02000017 /* FooterControlsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FooterControlsView.swift; sourceTree = "<group>"; };
 		A02000018 /* ClipRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipRowView.swift; sourceTree = "<group>"; };
 		A02000019 /* JobRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JobRowView.swift; sourceTree = "<group>"; };
+		A0200001A /* ReportGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportGenerator.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -147,6 +149,7 @@
 				A0200000D /* QueueManager.swift */,
 				A02000010 /* SpeedTracker.swift */,
 				A02000011 /* VerificationService.swift */,
+				A0200001A /* ReportGenerator.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -297,6 +300,7 @@
 				A01000015 /* FooterControlsView.swift in Sources */,
 				A01000016 /* ClipRowView.swift in Sources */,
 				A01000017 /* JobRowView.swift in Sources */,
+				A01000018 /* ReportGenerator.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
