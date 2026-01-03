@@ -120,7 +120,11 @@ class P2CardParser {
             audioFiles: audioFiles,
             metadataFile: url,
             proxyFile: proxyURL,
-            iconFile: iconURL
+            iconFile: iconURL,
+            globalShotID: metadata.globalShotID,
+            spanPreviousClipID: metadata.spanPreviousClipID,
+            spanNextClipID: metadata.spanNextClipID,
+            spanTopClipID: metadata.spanTopClipID
         )
     }
 }
@@ -137,6 +141,12 @@ private struct P2ClipMetadata {
     var frameRateFromCodec: Bool = false  // Track if we got rate from codec
     var videoCodec: String = "AVC-Intra"
     var audioChannels: Int = 0
+
+    // Spanned clip relation metadata
+    var globalShotID: String?          // Shared ID across spanned clips
+    var spanPreviousClipID: String?    // GlobalClipID of previous span
+    var spanNextClipID: String?        // GlobalClipID of next span
+    var spanTopClipID: String?         // GlobalClipID of first clip in span
 
     /// Duration converted to timecode frames
     var durationInTCFrames: Int {
@@ -169,6 +179,13 @@ private class P2XMLParser: NSObject, XMLParserDelegate {
     private var inVideo = false
     private var parseError: Error?
     private var clipNameDepth = 0  // Track nesting to get the right ClipName
+
+    // Relation element tracking for spanned clips
+    private var inRelation = false
+    private var inConnection = false
+    private var inPrevious = false
+    private var inNext = false
+    private var inTop = false
 
     init(data: Data) {
         self.data = data
@@ -206,6 +223,17 @@ private class P2XMLParser: NSObject, XMLParserDelegate {
             }
         case "ClipName":
             clipNameDepth += 1
+        // Relation element hierarchy for spanned clips
+        case "Relation":
+            inRelation = true
+        case "Connection":
+            if inRelation { inConnection = true }
+        case "Previous":
+            if inConnection { inPrevious = true }
+        case "Next":
+            if inConnection { inNext = true }
+        case "Top":
+            if inConnection { inTop = true }
         default:
             break
         }
@@ -227,7 +255,15 @@ private class P2XMLParser: NSObject, XMLParserDelegate {
             }
             clipNameDepth -= 1
         case "GlobalClipID":
-            if metadata.globalClipID.isEmpty {
+            // Handle GlobalClipID based on context
+            if inPrevious {
+                metadata.spanPreviousClipID = text
+            } else if inNext {
+                metadata.spanNextClipID = text
+            } else if inTop {
+                metadata.spanTopClipID = text
+            } else if metadata.globalClipID.isEmpty {
+                // Main clip's GlobalClipID (outside of Relation/Connection)
                 metadata.globalClipID = text
             }
         case "Duration":
@@ -267,6 +303,21 @@ private class P2XMLParser: NSObject, XMLParserDelegate {
             inVideo = false
         case "EssenceList":
             inEssenceList = false
+        // Relation element hierarchy - capture span metadata
+        case "GlobalShotID":
+            if inRelation && metadata.globalShotID == nil {
+                metadata.globalShotID = text
+            }
+        case "Previous":
+            inPrevious = false
+        case "Next":
+            inNext = false
+        case "Top":
+            inTop = false
+        case "Connection":
+            inConnection = false
+        case "Relation":
+            inRelation = false
         default:
             break
         }
