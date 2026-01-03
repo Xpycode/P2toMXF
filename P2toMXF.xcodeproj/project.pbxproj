@@ -28,6 +28,11 @@
 		A01000010 /* EstimateSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000012 /* EstimateSheet.swift */; };
 		A01000011 /* CardListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000013 /* CardListView.swift */; };
 		A01000012 /* BundledToolResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000014 /* BundledToolResolver.swift */; };
+		A01000013 /* HeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000015 /* HeaderView.swift */; };
+		A01000014 /* ConsoleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000016 /* ConsoleView.swift */; };
+		A01000015 /* FooterControlsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000017 /* FooterControlsView.swift */; };
+		A01000016 /* ClipRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000018 /* ClipRowView.swift */; };
+		A01000017 /* JobRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000019 /* JobRowView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -54,6 +59,11 @@
 		A02000012 /* EstimateSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EstimateSheet.swift; sourceTree = "<group>"; };
 		A02000013 /* CardListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardListView.swift; sourceTree = "<group>"; };
 		A02000014 /* BundledToolResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BundledToolResolver.swift; sourceTree = "<group>"; };
+		A02000015 /* HeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeaderView.swift; sourceTree = "<group>"; };
+		A02000016 /* ConsoleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConsoleView.swift; sourceTree = "<group>"; };
+		A02000017 /* FooterControlsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FooterControlsView.swift; sourceTree = "<group>"; };
+		A02000018 /* ClipRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipRowView.swift; sourceTree = "<group>"; };
+		A02000019 /* JobRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JobRowView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -159,6 +169,11 @@
 				A0200000F /* ProgressControlPanel.swift */,
 				A02000012 /* EstimateSheet.swift */,
 				A02000013 /* CardListView.swift */,
+				A02000015 /* HeaderView.swift */,
+				A02000016 /* ConsoleView.swift */,
+				A02000017 /* FooterControlsView.swift */,
+				A02000018 /* ClipRowView.swift */,
+				A02000019 /* JobRowView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -277,6 +292,11 @@
 				A01000010 /* EstimateSheet.swift in Sources */,
 				A01000011 /* CardListView.swift in Sources */,
 				A01000012 /* BundledToolResolver.swift in Sources */,
+				A01000013 /* HeaderView.swift in Sources */,
+				A01000014 /* ConsoleView.swift in Sources */,
+				A01000015 /* FooterControlsView.swift in Sources */,
+				A01000016 /* ClipRowView.swift in Sources */,
+				A01000017 /* JobRowView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

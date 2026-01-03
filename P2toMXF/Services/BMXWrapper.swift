@@ -1,8 +1,12 @@
 import Foundation
 
+// MARK: - BMX Wrapper
+
 /// Wrapper for BMX (BBC MXF) tools for professional MXF handling
 /// BMX properly handles P2 OPAtom MXF files where FFmpeg fails
 class BMXWrapper {
+
+    // MARK: - Error Types
 
     enum BMXError: LocalizedError {
         case bmxNotFound
@@ -24,10 +28,14 @@ class BMXWrapper {
         }
     }
 
+    // MARK: - Types
+
     /// Progress callback: (progress 0.0-1.0, current status message)
     typealias ProgressHandler = (Double, String) -> Void
     /// Log callback for console output
     typealias LogHandler = (String) -> Void
+
+    // MARK: - Properties
 
     private var currentProcess: Process?
     private var isCancelling = false  // Flag to distinguish cancellation from failure
@@ -52,6 +60,8 @@ class BMXWrapper {
     var isBMXAvailable: Bool {
         toolResolver.isAvailable(BundledTool.bmxtranswrap) && toolResolver.bmxLibPath != nil
     }
+
+    // MARK: - Clip Rewrapping
 
     /// Rewraps a P2 clip (OPAtom) to a single OP1a MXF file
     /// This is the key operation that FFmpeg cannot do - BMX handles P2's index tables correctly
@@ -139,6 +149,8 @@ class BMXWrapper {
 
         return rewrappedFiles
     }
+
+    // MARK: - Process Execution
 
     /// Thread-safe container for collecting process output.
     ///
@@ -257,6 +269,8 @@ class BMXWrapper {
         }
     }
 
+    // MARK: - Cancellation
+
     /// Cancels any running operation
     /// Uses process group killing to ensure child processes are also terminated
     func cancel() {
@@ -282,6 +296,8 @@ class BMXWrapper {
     func resetCancellation() {
         isCancelling = false
     }
+
+    // MARK: - Diagnostics
 
     /// Gets BMX version info for display
     func getVersionInfo() async -> String? {

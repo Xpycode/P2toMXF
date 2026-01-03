@@ -1,9 +1,13 @@
 import Foundation
 import AppKit
 
+// MARK: - FFmpeg Wrapper
+
 /// Wrapper for FFmpeg operations, specifically for combining P2 MXF files
 /// Uses BMX for P2 OPAtom -> OP1a rewrapping, then FFmpeg for concatenation
 class FFmpegWrapper {
+
+    // MARK: - Error Types
 
     enum FFmpegError: LocalizedError {
         case ffmpegNotFound
@@ -28,6 +32,8 @@ class FFmpegWrapper {
         }
     }
 
+    // MARK: - Types
+
     /// Progress callback: (progress 0.0-1.0, current status message)
     typealias ProgressHandler = (Double, String) -> Void
     /// Log callback for console output
@@ -44,6 +50,8 @@ class FFmpegWrapper {
         var bitrate: String?
         var size: String?
     }
+
+    // MARK: - Properties
 
     private var currentProcess: Process?
     private let cancelLock = NSLock()
@@ -65,6 +73,8 @@ class FFmpegWrapper {
     var isFFmpegAvailable: Bool {
         toolResolver.isAvailable(.ffmpeg)
     }
+
+    // MARK: - Single Clip Conversion
 
     /// Converts a P2 clip to a single MXF file
     /// - Parameters:
@@ -189,14 +199,11 @@ class FFmpegWrapper {
             }
             logHandler("Total frames: \(totalFrames)")
 
-            // Adjust output format in args based on actual format
-            var adjustedSettings = settings
             // Note: rewrapClipWithFFmpeg handles the format internally based on outputURL extension
-
             try await rewrapClipWithFFmpeg(
                 clip,
                 to: outputURL,
-                settings: adjustedSettings,
+                settings: settings,
                 totalFrames: totalFrames,
                 progress: progress,
                 logHandler: logHandler,
@@ -312,6 +319,8 @@ class FFmpegWrapper {
             metricsHandler: metricsHandler
         )
     }
+
+    // MARK: - Clip Merging
 
     /// Merges multiple P2 clips into a single MXF file
     /// Uses BMX to rewrap each clip first, then FFmpeg to concatenate
@@ -491,6 +500,8 @@ class FFmpegWrapper {
         logHandler("=== Merge Complete ===")
     }
 
+    // MARK: - Output Parsing
+
     /// Parses FFmpeg progress output to extract metrics
     /// FFmpeg outputs lines like: "frame=  123 fps= 24.5 q=28.0 size=   1234kB time=00:01:23.45 bitrate= 123.4kbits/s speed=12.3x"
     private func parseFFmpegOutput(_ output: String) -> FFmpegOutputMetrics {
@@ -538,6 +549,8 @@ class FFmpegWrapper {
 
         return metrics
     }
+
+    // MARK: - Process Execution
 
     /// Thread-safe container for collecting FFmpeg stderr output with throttled progress updates.
     ///
@@ -723,6 +736,8 @@ class FFmpegWrapper {
         }
     }
 
+    // MARK: - Cancellation
+
     /// Cancels any running conversion (both FFmpeg and BMX processes)
     /// Uses process group killing to ensure child processes are also terminated
     func cancelConversion() {
@@ -801,6 +816,8 @@ class FFmpegWrapper {
             }
         }
     }
+
+    // MARK: - Diagnostics
 
     /// Gets FFmpeg version info for display
     func getVersionInfo() async -> String? {

@@ -20,10 +20,15 @@ struct P2Clip: Identifiable, Hashable, Codable {
 
     // MARK: - URL Accessors
 
+    /// Video MXF file URLs (typically 1 file for P2)
     var videoFiles: [URL] { videoFilePaths.map { URL(fileURLWithPath: $0) } }
+    /// Audio MXF file URLs (typically 4 mono channels for P2)
     var audioFiles: [URL] { audioFilePaths.map { URL(fileURLWithPath: $0) } }
+    /// XML metadata file URL
     var metadataFile: URL { URL(fileURLWithPath: metadataFilePath) }
+    /// Low-resolution proxy file URL, if available
     var proxyFile: URL? { proxyFilePath.map { URL(fileURLWithPath: $0) } }
+    /// Thumbnail icon file URL, if available
     var iconFile: URL? { iconFilePath.map { URL(fileURLWithPath: $0) } }
 
     // MARK: - Initializers
@@ -57,6 +62,7 @@ struct P2Clip: Identifiable, Hashable, Codable {
         self.iconFilePath = iconFile?.path
     }
 
+    /// User-friendly name for display, preferring clipName over globalClipID
     var displayName: String {
         clipName.isEmpty ? globalClipID : clipName
     }
@@ -119,7 +125,9 @@ struct ClipParseError: Identifiable, Codable {
     private let filePathString: String
     let errorMessage: String
 
+    /// Full URL to the XML file that failed to parse
     var filePath: URL { URL(fileURLWithPath: filePathString) }
+    /// Just the filename component for display
     var fileName: String { filePath.lastPathComponent }
 
     init(file: URL, error: Error) {
@@ -143,13 +151,15 @@ struct P2Card: Identifiable, Codable {
     let clips: [P2Clip]
     let parseErrors: [ClipParseError]
 
-    // URL accessor
+    /// URL to the P2 card root directory (CONTENTS folder parent)
     var rootPath: URL { URL(fileURLWithPath: rootPathString) }
 
+    /// Card name derived from folder name (e.g., "P2 Card 001")
     var name: String {
         rootPath.lastPathComponent
     }
 
+    /// Number of successfully parsed clips on this card
     var clipCount: Int {
         clips.count
     }
@@ -190,24 +200,24 @@ struct RecordGroup: Identifiable {
     let clips: [P2Clip]
     let groupIndex: Int  // 1-based for display
 
-    /// Start timecode of the first clip in the group
+    /// Start timecode of the first clip in the group (for display and continuity checking)
     var startTimecode: String {
         clips.first?.startTimecode ?? ""
     }
 
-    /// Total duration in frames across all clips
+    /// Total duration in frames across all clips in this recording group
     var totalDurationFrames: Int {
         clips.reduce(0) { $0 + $1.durationFrames }
     }
 
-    /// Duration formatted as HH:MM:SS:FF timecode
+    /// Duration formatted as HH:MM:SS:FF timecode for display
     var formattedDuration: String {
         guard let fps = clips.first?.frameRateDouble, fps > 0 else { return "--:--:--:--" }
         let tc = Timecode.from(frames: totalDurationFrames, frameRate: fps)
         return tc.description
     }
 
-    /// Number of clips in this group
+    /// Number of clips in this recording group
     var clipCount: Int {
         clips.count
     }
@@ -223,7 +233,7 @@ struct ConversionSettings: Codable {
     var preserveTimecode: Bool = true
     var audioMapping: AudioMapping = .allChannels
 
-    // URL accessor (not encoded directly)
+    /// Output directory URL for converted files (not encoded directly, derived from path)
     var outputDirectory: URL? {
         get { outputDirectoryPath.map { URL(fileURLWithPath: $0) } }
         set { outputDirectoryPath = newValue?.path }
@@ -233,6 +243,7 @@ struct ConversionSettings: Codable {
         case mxf = "MXF"
         case mov = "MOV"
 
+        /// Lowercase file extension for use in filenames
         var fileExtension: String { rawValue.lowercased() }
     }
 
@@ -287,7 +298,7 @@ struct Timecode: Equatable {
         self.frameRate = frameRate
     }
 
-    /// Convert to absolute frame number
+    /// Convert to absolute frame number for arithmetic operations
     var totalFrames: Int {
         let fps = Int(frameRate)
         return hours * 3600 * fps + minutes * 60 * fps + seconds * fps + frames
@@ -310,7 +321,7 @@ struct Timecode: Equatable {
         return Timecode(hours: h, minutes: m, seconds: s, frames: f, frameRate: frameRate)
     }
 
-    /// Calculate frame gap between end of clip1 and start of clip2
+    /// Calculates the frame gap between end of clip1 and start of clip2
     /// Returns: 0 = continuous, positive = gap, negative = overlap
     static func frameGap(from tc1: Timecode, duration1Frames: Int, to tc2: Timecode) -> Int {
         let expectedNextFrame = tc1.totalFrames + duration1Frames
@@ -318,6 +329,7 @@ struct Timecode: Equatable {
         return actualNextFrame - expectedNextFrame
     }
 
+    /// Formatted timecode string (HH:MM:SS:FF) for display
     var description: String {
         String(format: "%02d:%02d:%02d:%02d", hours, minutes, seconds, frames)
     }
