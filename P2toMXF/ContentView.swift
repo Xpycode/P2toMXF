@@ -84,7 +84,7 @@ struct ContentView: View {
                     }
                 }
             }
-            .frame(minHeight: 550)  // Main content maintains minimum height
+            .frame(minHeight: 900)  // Main content maintains minimum height
 
             // Console drawer - extends window when visible
             if showConsole {
