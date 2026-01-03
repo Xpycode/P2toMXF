@@ -11,6 +11,12 @@ struct P2Clip: Identifiable, Hashable, Codable {
     let videoCodec: String
     let audioChannels: Int
 
+    // Spanned clip metadata (from <Relation> element)
+    let globalShotID: String?          // Shared ID across spanned clips
+    let spanPreviousClipID: String?    // GlobalClipID of previous span
+    let spanNextClipID: String?        // GlobalClipID of next span
+    let spanTopClipID: String?         // GlobalClipID of first clip in span
+
     // File paths (stored as strings for Codable, converted to URLs via computed properties)
     private let videoFilePaths: [String]
     private let audioFilePaths: [String]
@@ -45,7 +51,11 @@ struct P2Clip: Identifiable, Hashable, Codable {
         audioFiles: [URL],
         metadataFile: URL,
         proxyFile: URL?,
-        iconFile: URL?
+        iconFile: URL?,
+        globalShotID: String? = nil,
+        spanPreviousClipID: String? = nil,
+        spanNextClipID: String? = nil,
+        spanTopClipID: String? = nil
     ) {
         self.id = UUID()
         self.clipName = clipName
@@ -60,11 +70,37 @@ struct P2Clip: Identifiable, Hashable, Codable {
         self.metadataFilePath = metadataFile.path
         self.proxyFilePath = proxyFile?.path
         self.iconFilePath = iconFile?.path
+        self.globalShotID = globalShotID
+        self.spanPreviousClipID = spanPreviousClipID
+        self.spanNextClipID = spanNextClipID
+        self.spanTopClipID = spanTopClipID
     }
 
     /// User-friendly name for display, preferring clipName over globalClipID
     var displayName: String {
         clipName.isEmpty ? globalClipID : clipName
+    }
+
+    // MARK: - Span Detection
+
+    /// True if this clip is part of a spanned recording (camera-split)
+    var isSpanned: Bool {
+        globalShotID != nil && (spanPreviousClipID != nil || spanNextClipID != nil)
+    }
+
+    /// True if this is the first clip in a spanned sequence
+    var isSpanStart: Bool {
+        isSpanned && spanPreviousClipID == nil
+    }
+
+    /// True if this is the last clip in a spanned sequence
+    var isSpanEnd: Bool {
+        isSpanned && spanNextClipID == nil
+    }
+
+    /// True if this is a middle clip in a spanned sequence
+    var isSpanMiddle: Bool {
+        isSpanned && spanPreviousClipID != nil && spanNextClipID != nil
     }
 
     /// Total file size of all source files (video + audio) in bytes
@@ -194,11 +230,30 @@ struct P2Card: Identifiable, Codable {
     }
 }
 
-/// A group of timecode-continuous clips representing a single recording session
+/// A group of clips representing a single recording session
 struct RecordGroup: Identifiable {
     let id = UUID()
     let clips: [P2Clip]
     let groupIndex: Int  // 1-based for display
+    let groupType: GroupType
+
+    /// How this group was detected
+    enum GroupType {
+        case spanned        // Clips share GlobalShotID (camera-split recording)
+        case continuous     // Timecode-continuous but not spanned
+        case single         // Single clip, no grouping needed
+    }
+
+    init(clips: [P2Clip], groupIndex: Int, groupType: GroupType = .continuous) {
+        self.clips = clips
+        self.groupIndex = groupIndex
+        self.groupType = groupType
+    }
+
+    /// True if this group was detected via span metadata
+    var isSpanned: Bool {
+        groupType == .spanned
+    }
 
     /// Start timecode of the first clip in the group (for display and continuity checking)
     var startTimecode: String {
@@ -220,6 +275,15 @@ struct RecordGroup: Identifiable {
     /// Number of clips in this recording group
     var clipCount: Int {
         clips.count
+    }
+
+    /// Description of how the group was formed
+    var groupTypeLabel: String {
+        switch groupType {
+        case .spanned: return "Spanned"
+        case .continuous: return "Continuous"
+        case .single: return "Single"
+        }
     }
 }
 

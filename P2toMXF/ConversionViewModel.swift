@@ -120,16 +120,107 @@ class ConversionViewModel: ObservableObject {
 
     // MARK: - Record Groups
 
-    /// Clips segmented into timecode-continuous groups
+    /// Clips segmented into groups by span metadata (preferred) or timecode continuity (fallback)
     var recordGroups: [RecordGroup] {
         let clips = sortedAllClips
         guard !clips.isEmpty else { return [] }
 
-        var groups: [[P2Clip]] = [[clips[0]]]
+        // Step 1: Build span groups from clips with matching GlobalShotID
+        let spanGroups = buildSpanGroups(from: clips)
+        let spannedClipIDs = Set(spanGroups.flatMap { $0.map { $0.id } })
 
-        for i in 1..<clips.count {
-            let prev = clips[i - 1]
-            let curr = clips[i]
+        // Step 2: Group remaining (non-spanned) clips by timecode continuity
+        let unspannedClips = clips.filter { !spannedClipIDs.contains($0.id) }
+        let continuousGroups = groupByTimecodeContinuity(unspannedClips)
+
+        // Step 3: Combine all groups with appropriate types
+        var allGroups: [RecordGroup] = []
+
+        // Add span groups
+        for spanGroup in spanGroups {
+            let groupType: RecordGroup.GroupType = spanGroup.count > 1 ? .spanned : .single
+            allGroups.append(RecordGroup(clips: spanGroup, groupIndex: 0, groupType: groupType))
+        }
+
+        // Add continuous groups
+        for group in continuousGroups {
+            let groupType: RecordGroup.GroupType = group.count > 1 ? .continuous : .single
+            allGroups.append(RecordGroup(clips: group, groupIndex: 0, groupType: groupType))
+        }
+
+        // Sort all groups by first clip's timecode
+        allGroups.sort { ($0.clips.first?.startTimecode ?? "") < ($1.clips.first?.startTimecode ?? "") }
+
+        // Re-index after sorting
+        return allGroups.enumerated().map { index, group in
+            RecordGroup(clips: group.clips, groupIndex: index + 1, groupType: group.groupType)
+        }
+    }
+
+    /// Builds span groups from clips sharing the same GlobalShotID
+    private func buildSpanGroups(from clips: [P2Clip]) -> [[P2Clip]] {
+        // Group clips by GlobalShotID
+        var shotIDToClips: [String: [P2Clip]] = [:]
+
+        for clip in clips {
+            if let shotID = clip.globalShotID {
+                shotIDToClips[shotID, default: []].append(clip)
+            }
+        }
+
+        // Build ordered span groups (only groups with actual spanning)
+        var spanGroups: [[P2Clip]] = []
+
+        for (_, spannedClips) in shotIDToClips {
+            // Order clips by following the Previous/Next chain
+            let ordered = orderSpannedClips(spannedClips)
+            spanGroups.append(ordered)
+        }
+
+        return spanGroups
+    }
+
+    /// Orders spanned clips by following the Previous/Next chain
+    private func orderSpannedClips(_ clips: [P2Clip]) -> [P2Clip] {
+        guard clips.count > 1 else { return clips }
+
+        // Find the first clip (no previous)
+        guard let first = clips.first(where: { $0.spanPreviousClipID == nil }) else {
+            // Fallback to timecode order if chain is broken
+            return clips.sorted { $0.startTimecode < $1.startTimecode }
+        }
+
+        var ordered: [P2Clip] = [first]
+        var current = first
+
+        // Follow the Next chain
+        while let nextID = current.spanNextClipID,
+              let next = clips.first(where: { $0.globalClipID == nextID }) {
+            ordered.append(next)
+            current = next
+        }
+
+        // If we didn't get all clips, append any missing ones (broken chain)
+        if ordered.count < clips.count {
+            let orderedIDs = Set(ordered.map { $0.id })
+            let missing = clips.filter { !orderedIDs.contains($0.id) }
+                .sorted { $0.startTimecode < $1.startTimecode }
+            ordered.append(contentsOf: missing)
+        }
+
+        return ordered
+    }
+
+    /// Groups clips by timecode continuity (fallback for non-spanned clips)
+    private func groupByTimecodeContinuity(_ clips: [P2Clip]) -> [[P2Clip]] {
+        guard !clips.isEmpty else { return [] }
+
+        let sorted = clips.sorted { $0.startTimecode < $1.startTimecode }
+        var groups: [[P2Clip]] = [[sorted[0]]]
+
+        for i in 1..<sorted.count {
+            let prev = sorted[i - 1]
+            let curr = sorted[i]
 
             if areContinuous(prev, curr) {
                 groups[groups.count - 1].append(curr)
@@ -138,9 +229,7 @@ class ConversionViewModel: ObservableObject {
             }
         }
 
-        return groups.enumerated().map { index, clips in
-            RecordGroup(clips: clips, groupIndex: index + 1)
-        }
+        return groups
     }
 
     /// Check if two consecutive clips are timecode-continuous

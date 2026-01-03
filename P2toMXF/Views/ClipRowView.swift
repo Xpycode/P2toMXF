@@ -19,9 +19,26 @@ struct GroupHeaderView: View {
             }
             .buttonStyle(.plain)
 
+            // Span indicator (link icon for spanned groups)
+            if group.isSpanned {
+                Image(systemName: "link")
+                    .foregroundStyle(.orange)
+                    .font(.caption)
+                    .help("Spanned recording (camera-split)")
+            }
+
             // Group info
             Text("Group \(group.groupIndex)")
                 .font(.subheadline.bold())
+
+            // Group type badge
+            Text(group.groupTypeLabel)
+                .font(.caption2)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(groupTypeBadgeColor.opacity(0.2))
+                .foregroundStyle(groupTypeBadgeColor)
+                .cornerRadius(4)
 
             Text("(\(group.clipCount) clips)")
                 .font(.caption)
@@ -46,6 +63,14 @@ struct GroupHeaderView: View {
         .padding(.vertical, 4)
         .contentShape(Rectangle())
         .onTapGesture(perform: onToggle)
+    }
+
+    private var groupTypeBadgeColor: Color {
+        switch group.groupType {
+        case .spanned: return .orange
+        case .continuous: return .blue
+        case .single: return .gray
+        }
     }
 
     private var checkboxIcon: String {
