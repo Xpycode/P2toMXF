@@ -9,90 +9,96 @@ struct ContentView: View {
     @StateObject private var queueManager = QueueManager.shared
     @State private var showingP2Picker = false
     @State private var showingOutputPicker = false
-    @State private var showConsole = true
+    @State private var showConsole = false
     @State private var showQueue = true
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            HeaderView(
-                viewModel: viewModel,
-                queueManager: queueManager,
-                showQueue: $showQueue,
-                showConsole: $showConsole
-            )
-            .padding()
-            .background(.ultraThinMaterial)
-
-            Divider()
-
-            // Three-column layout: Cards | Clips | Queue
-            HStack(spacing: 0) {
-                // Left: Card list
-                CardListView(viewModel: viewModel, showingP2Picker: $showingP2Picker)
-                    .fileImporter(
-                        isPresented: $showingP2Picker,
-                        allowedContentTypes: [.folder],
-                        allowsMultipleSelection: false
-                    ) { result in
-                        if case .success(let urls) = result, let url = urls.first {
-                            _ = url.startAccessingSecurityScopedResource()
-                            viewModel.loadP2Card(from: url)
-                        }
-                    }
+            // Main content area (fixed minimum height)
+            VStack(spacing: 0) {
+                // Header
+                HeaderView(
+                    viewModel: viewModel,
+                    queueManager: queueManager,
+                    showQueue: $showQueue,
+                    showConsole: $showConsole
+                )
+                .padding()
+                .background(.ultraThinMaterial)
 
                 Divider()
 
-                // Middle: Clip list for active card
-                VStack(spacing: 0) {
-                    if let card = viewModel.activeCard {
-                        clipListView(card: card)
-                    } else {
-                        emptyStateView
-                    }
+                // Three-column layout: Cards | Clips | Queue
+                HStack(spacing: 0) {
+                    // Left: Card list
+                    CardListView(viewModel: viewModel, showingP2Picker: $showingP2Picker)
+                        .fileImporter(
+                            isPresented: $showingP2Picker,
+                            allowedContentTypes: [.folder],
+                            allowsMultipleSelection: false
+                        ) { result in
+                            if case .success(let urls) = result, let url = urls.first {
+                                _ = url.startAccessingSecurityScopedResource()
+                                viewModel.loadP2Card(from: url)
+                            }
+                        }
 
-                    // Console output (below clip list)
-                    if showConsole {
+                    Divider()
+
+                    // Middle: Clip list for active card
+                    VStack(spacing: 0) {
+                        if let card = viewModel.activeCard {
+                            clipListView(card: card)
+                        } else {
+                            emptyStateView
+                        }
+                    }
+                    .frame(minWidth: 400)
+
+                    // Right: Queue panel
+                    if showQueue {
                         Divider()
-                        ConsoleView(
-                            viewModel: viewModel,
-                            queueManager: queueManager,
-                            showConsole: $showConsole
-                        )
+                        QueueListView()
+                            .frame(minWidth: 220, idealWidth: 280, maxWidth: 350)
                     }
                 }
-                .frame(minWidth: 400)
 
-                // Right: Queue panel
-                if showQueue {
-                    Divider()
-                    QueueListView()
-                        .frame(minWidth: 220, idealWidth: 280, maxWidth: 350)
+                Divider()
+
+                // Footer with settings and convert button
+                FooterControlsView(
+                    viewModel: viewModel,
+                    queueManager: queueManager,
+                    showingOutputPicker: $showingOutputPicker
+                )
+                .padding()
+                .background(.ultraThinMaterial)
+                .fileImporter(
+                    isPresented: $showingOutputPicker,
+                    allowedContentTypes: [.folder],
+                    allowsMultipleSelection: false
+                ) { result in
+                    if case .success(let urls) = result, let url = urls.first {
+                        _ = url.startAccessingSecurityScopedResource()
+                        viewModel.settings.outputDirectory = url
+                    }
                 }
             }
+            .frame(minHeight: 900)  // Main content maintains minimum height
 
-            Divider()
-
-            // Footer with settings and convert button
-            FooterControlsView(
-                viewModel: viewModel,
-                queueManager: queueManager,
-                showingOutputPicker: $showingOutputPicker
-            )
-            .padding()
-            .background(.ultraThinMaterial)
-            .fileImporter(
-                isPresented: $showingOutputPicker,
-                allowedContentTypes: [.folder],
-                allowsMultipleSelection: false
-            ) { result in
-                if case .success(let urls) = result, let url = urls.first {
-                    _ = url.startAccessingSecurityScopedResource()
-                    viewModel.settings.outputDirectory = url
-                }
+            // Console drawer - extends window when visible
+            if showConsole {
+                Divider()
+                ConsoleView(
+                    viewModel: viewModel,
+                    queueManager: queueManager,
+                    showConsole: $showConsole
+                )
+                .frame(height: 150)
             }
         }
-        .frame(minWidth: 1150, minHeight: 600)
+        .frame(minWidth: 1150)
+        .animation(.easeInOut(duration: 0.2), value: showConsole)
         .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
             Button("OK") { viewModel.errorMessage = nil }
         } message: {

@@ -577,15 +577,30 @@ class QueueManager: ObservableObject {
         do {
             jobs[index].status = .active
 
+            var outputFiles: [URL] = []
             switch job.settings.processingMode {
             case .concatenate:
-                try await processConcatenateJob(job, index: index)
+                outputFiles = try await processConcatenateJob(job, index: index)
             case .individual:
-                try await processIndividualJob(job, index: index)
+                outputFiles = try await processIndividualJob(job, index: index)
             }
 
             jobs[index].status = .completed
             jobs[index].progress = 1.0
+
+            // Generate conversion report if enabled
+            if job.settings.generateReport {
+                do {
+                    let reportURL = try await ReportGenerator.generateReport(
+                        for: job,
+                        outputFiles: outputFiles,
+                        includeChecksum: job.settings.includeChecksum
+                    )
+                    log("Report saved: \(reportURL.lastPathComponent)")
+                } catch {
+                    log("Warning: Failed to generate report - \(error.localizedDescription)")
+                }
+            }
 
             // Record the conversion speed for future estimates
             let elapsed = Date().timeIntervalSince(startTime)
@@ -621,7 +636,8 @@ class QueueManager: ObservableObject {
     }
 
     /// Processes a concatenation job (multiple clips -> single file)
-    private func processConcatenateJob(_ job: ConversionJob, index: Int) async throws {
+    /// - Returns: Array containing the single output file URL
+    private func processConcatenateJob(_ job: ConversionJob, index: Int) async throws -> [URL] {
         let totalBytes = job.clips.reduce(Int64(0)) { $0 + $1.totalFileSize }
         let fps = job.clips.first?.frameRateDouble ?? 25.0
         let totalDuration = Double(job.totalDurationFrames) / fps
@@ -648,12 +664,16 @@ class QueueManager: ObservableObject {
                 )
             }
         }
+
+        return [job.destinationURL]
     }
 
     /// Processes an individual files job (each clip -> separate file)
-    private func processIndividualJob(_ job: ConversionJob, index: Int) async throws {
+    /// - Returns: Array of all output file URLs created
+    private func processIndividualJob(_ job: ConversionJob, index: Int) async throws -> [URL] {
         let outputDir = job.destinationURL
         let ext = job.settings.outputContainer.fileExtension
+        var outputFiles: [URL] = []
 
         // Calculate totals for slow speed detection
         let totalBytes = job.clips.reduce(Int64(0)) { $0 + $1.totalFileSize }
@@ -704,8 +724,11 @@ class QueueManager: ObservableObject {
                 }
             }
 
+            outputFiles.append(clipOutputURL)
             log("Created: \(clipOutputURL.lastPathComponent)")
         }
+
+        return outputFiles
     }
 
     // MARK: - Verification

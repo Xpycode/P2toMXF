@@ -88,6 +88,20 @@ struct FooterControlsView: View {
             Toggle("Preserve TC", isOn: $viewModel.settings.preserveTimecode)
                 .toggleStyle(.checkbox)
 
+            Divider()
+                .frame(height: 16)
+
+            // Report options
+            Toggle("Report", isOn: $viewModel.settings.generateReport)
+                .toggleStyle(.checkbox)
+                .help("Generate XML report with conversion details")
+
+            if viewModel.settings.generateReport {
+                Toggle("MD5", isOn: $viewModel.settings.includeChecksum)
+                    .toggleStyle(.checkbox)
+                    .help("Include MD5 checksum in report (slower for large files)")
+            }
+
             Spacer()
         }
     }

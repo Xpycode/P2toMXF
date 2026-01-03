@@ -317,6 +317,31 @@ class ConversionViewModel: ObservableObject {
         activeCardId == card.id || (activeCardId == nil && loadedCards.first?.id == card.id)
     }
 
+    /// Reload the active card from disk
+    func refreshActiveCard() {
+        guard let card = activeCard else { return }
+        let rootPath = card.rootPath
+
+        isLoading = true
+        errorMessage = nil
+
+        Task {
+            do {
+                let refreshedCard = try parser.parseP2Card(at: rootPath)
+                // Replace the old card with refreshed data
+                if let index = loadedCards.firstIndex(where: { $0.id == card.id }) {
+                    loadedCards[index] = refreshedCard
+                }
+                activeCardId = refreshedCard.id
+                selectedClips = Set(refreshedCard.clips.map { $0.id })
+                conversionStatus = [:]
+            } catch {
+                self.errorMessage = "Refresh failed: \(error.localizedDescription)"
+            }
+            self.isLoading = false
+        }
+    }
+
     // MARK: - Selection
 
     func toggleClipSelection(_ clip: P2Clip) {
