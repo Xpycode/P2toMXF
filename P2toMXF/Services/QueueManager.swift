@@ -131,26 +131,50 @@ class QueueManager: ObservableObject {
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
 
-            let loadedJobs = try decoder.decode([ConversionJob].self, from: data)
+            var loadedJobs = try decoder.decode([ConversionJob].self, from: data)
 
             // Only restore pending and failed jobs (not active/completed)
-            jobs = loadedJobs.filter { job in
+            loadedJobs = loadedJobs.filter { job in
                 job.status == .pending || {
                     if case .failed = job.status { return true }
                     return false
                 }()
             }
 
-            // Reset any "active" or "preparing" states to pending
-            for index in jobs.indices {
-                if jobs[index].status == .active || jobs[index].status == .preparing {
-                    jobs[index].status = .pending
-                    jobs[index].progress = 0
+            // Reset any "active" or "preparing" states to pending, and resolve bookmarks
+            for index in loadedJobs.indices {
+                if loadedJobs[index].status == .active || loadedJobs[index].status == .preparing {
+                    loadedJobs[index].status = .pending
+                    loadedJobs[index].progress = 0
+                }
+
+                // Try to resolve security-scoped bookmarks
+                if loadedJobs[index].cardBookmarkData != nil {
+                    if loadedJobs[index].resolveCardBookmark() == nil {
+                        // Bookmark resolution failed - mark job as failed
+                        loadedJobs[index].status = .failed("Cannot access source folder (permission lost)")
+                        log("Job '\(loadedJobs[index].displayName)' failed: Cannot access source folder")
+                    }
+                }
+                if loadedJobs[index].outputBookmarkData != nil {
+                    if loadedJobs[index].resolveOutputBookmark() == nil {
+                        // Output bookmark resolution failed - mark job as failed
+                        loadedJobs[index].status = .failed("Cannot access output folder (permission lost)")
+                        log("Job '\(loadedJobs[index].displayName)' failed: Cannot access output folder")
+                    }
                 }
             }
 
+            jobs = loadedJobs
+
             if !jobs.isEmpty {
-                log("Restored \(jobs.count) job(s) from previous session")
+                let pendingCount = jobs.filter { $0.status == .pending }.count
+                let failedCount = jobs.filter { if case .failed = $0.status { return true } else { return false } }.count
+                if failedCount > 0 {
+                    log("Restored \(pendingCount) job(s), \(failedCount) failed (permission issues)")
+                } else {
+                    log("Restored \(jobs.count) job(s) from previous session")
+                }
             }
         } catch {
             print("Failed to load queue: \(error)")
@@ -223,13 +247,15 @@ class QueueManager: ObservableObject {
         let resolvedURL = resolveFilenameConflict(for: job.destinationURL)
 
         if resolvedURL != job.destinationURL {
-            // Create new job with resolved URL
+            // Create new job with resolved URL, preserving bookmark data
             finalJob = ConversionJob(
                 cardName: job.cardName,
                 cardPath: job.cardPath,
                 clips: job.clips,
                 settings: job.settings,
-                destinationURL: resolvedURL
+                destinationURL: resolvedURL,
+                cardBookmarkData: job.cardBookmarkData,
+                outputBookmarkData: job.outputBookmarkData
             )
             log("Renamed output to avoid conflict: \(resolvedURL.lastPathComponent)")
         }
@@ -246,7 +272,7 @@ class QueueManager: ObservableObject {
         }
     }
 
-    /// Creates and adds a job from parameters
+    /// Creates and adds a job from parameters with security-scoped bookmarks
     func addJob(
         cardName: String,
         cardPath: URL,
@@ -255,7 +281,8 @@ class QueueManager: ObservableObject {
         destinationURL: URL,
         autoStart: Bool = false
     ) {
-        let job = ConversionJob(
+        // Use withBookmarks to create security-scoped bookmarks for queue persistence
+        let job = ConversionJob.withBookmarks(
             cardName: cardName,
             cardPath: cardPath,
             clips: clips,
@@ -430,11 +457,34 @@ class QueueManager: ObservableObject {
             log("Estimated time: \(estimate.formattedEstimate) (\(estimate.formattedSpeed))")
         }
 
-        // Start security-scoped access to the card
-        let accessGranted = job.cardPath.startAccessingSecurityScopedResource()
+        // Resolve bookmarks and start security-scoped access
+        var mutableJob = job
+        let cardURL: URL
+        if let resolvedCardURL = mutableJob.resolveCardBookmark() {
+            cardURL = resolvedCardURL
+            // Update the job in the array with refreshed bookmark if it was stale
+            jobs[index] = mutableJob
+        } else {
+            cardURL = job.cardPath
+        }
+
+        let outputDirURL: URL
+        if let resolvedOutputURL = mutableJob.resolveOutputBookmark() {
+            outputDirURL = resolvedOutputURL
+            jobs[index] = mutableJob
+        } else {
+            outputDirURL = job.destinationURL.deletingLastPathComponent()
+        }
+
+        // Start security-scoped access to the card and output directory
+        let cardAccessGranted = cardURL.startAccessingSecurityScopedResource()
+        let outputAccessGranted = outputDirURL.startAccessingSecurityScopedResource()
         defer {
-            if accessGranted {
-                job.cardPath.stopAccessingSecurityScopedResource()
+            if cardAccessGranted {
+                cardURL.stopAccessingSecurityScopedResource()
+            }
+            if outputAccessGranted {
+                outputDirURL.stopAccessingSecurityScopedResource()
             }
         }
 

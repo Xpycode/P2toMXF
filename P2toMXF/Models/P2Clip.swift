@@ -113,11 +113,35 @@ struct P2Clip: Identifiable, Hashable, Codable {
     }
 }
 
+/// Represents a parsing error for a single clip XML file
+struct ClipParseError: Identifiable, Codable {
+    let id: UUID
+    private let filePathString: String
+    let errorMessage: String
+
+    var filePath: URL { URL(fileURLWithPath: filePathString) }
+    var fileName: String { filePath.lastPathComponent }
+
+    init(file: URL, error: Error) {
+        self.id = UUID()
+        self.filePathString = file.path
+        self.errorMessage = error.localizedDescription
+    }
+
+    // For Codable
+    init(file: URL, message: String) {
+        self.id = UUID()
+        self.filePathString = file.path
+        self.errorMessage = message
+    }
+}
+
 /// Represents a complete P2 card with all its clips
 struct P2Card: Identifiable, Codable {
     let id: UUID
     private let rootPathString: String
     let clips: [P2Clip]
+    let parseErrors: [ClipParseError]
 
     // URL accessor
     var rootPath: URL { URL(fileURLWithPath: rootPathString) }
@@ -128,6 +152,11 @@ struct P2Card: Identifiable, Codable {
 
     var clipCount: Int {
         clips.count
+    }
+
+    /// Whether any clips failed to parse
+    var hasParseErrors: Bool {
+        !parseErrors.isEmpty
     }
 
     /// Total duration of all clips in frames
@@ -142,15 +171,16 @@ struct P2Card: Identifiable, Codable {
         return tc.description
     }
 
-    init(rootPath: URL, clips: [P2Clip]) {
+    init(rootPath: URL, clips: [P2Clip], parseErrors: [ClipParseError] = []) {
         self.id = UUID()
         self.rootPathString = rootPath.path
         self.clips = clips
+        self.parseErrors = parseErrors
     }
 
     // Codable
     enum CodingKeys: String, CodingKey {
-        case id, rootPathString, clips
+        case id, rootPathString, clips, parseErrors
     }
 }
 
@@ -719,15 +749,19 @@ enum JobStatus: Equatable, Codable {
 struct ConversionJob: Identifiable, Codable {
     let id: UUID
     let cardName: String          // Source P2 card name
-    private let cardPathString: String  // For security-scoped access (stored as path)
+    private var cardPathString: String  // For security-scoped access (stored as path)
     let clips: [P2Clip]           // Clips to process
     let settings: ConversionSettings
-    private let destinationPathString: String  // Final output path (stored as path)
+    private var destinationPathString: String  // Final output path (stored as path)
     let createdAt: Date
 
     var status: JobStatus = .pending
     var progress: Double = 0.0    // 0.0 to 1.0
     var startedAt: Date?          // When processing started (for elapsed time)
+
+    // Security-scoped bookmark data for persisting file access across app launches
+    var cardBookmarkData: Data?
+    var outputBookmarkData: Data?
 
     // Verification state
     var verificationStatus: VerificationStatus = .unverified
@@ -735,8 +769,72 @@ struct ConversionJob: Identifiable, Codable {
     var verificationProgress: Double = 0.0  // 0.0 to 1.0
 
     // URL accessors
-    var cardPath: URL { URL(fileURLWithPath: cardPathString) }
-    var destinationURL: URL { URL(fileURLWithPath: destinationPathString) }
+    var cardPath: URL {
+        get { URL(fileURLWithPath: cardPathString) }
+        set { cardPathString = newValue.path }
+    }
+    var destinationURL: URL {
+        get { URL(fileURLWithPath: destinationPathString) }
+        set { destinationPathString = newValue.path }
+    }
+
+    /// Resolves the card bookmark to a security-scoped URL
+    /// - Returns: URL with security scope, or nil if bookmark is invalid/stale
+    mutating func resolveCardBookmark() -> URL? {
+        guard let data = cardBookmarkData else {
+            return URL(fileURLWithPath: cardPathString)
+        }
+        var isStale = false
+        guard let url = try? URL(
+            resolvingBookmarkData: data,
+            options: .withSecurityScope,
+            relativeTo: nil,
+            bookmarkDataIsStale: &isStale
+        ) else {
+            return nil
+        }
+        if isStale {
+            // Try to regenerate bookmark with new URL
+            if let newData = try? url.bookmarkData(
+                options: .withSecurityScope,
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            ) {
+                cardBookmarkData = newData
+            }
+        }
+        cardPathString = url.path
+        return url
+    }
+
+    /// Resolves the output bookmark to a security-scoped URL
+    /// - Returns: URL with security scope, or nil if bookmark is invalid/stale
+    mutating func resolveOutputBookmark() -> URL? {
+        guard let data = outputBookmarkData else {
+            return URL(fileURLWithPath: destinationPathString)
+        }
+        var isStale = false
+        guard let url = try? URL(
+            resolvingBookmarkData: data,
+            options: .withSecurityScope,
+            relativeTo: nil,
+            bookmarkDataIsStale: &isStale
+        ) else {
+            return nil
+        }
+        if isStale {
+            // Try to regenerate bookmark with new URL
+            if let newData = try? url.bookmarkData(
+                options: .withSecurityScope,
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            ) {
+                outputBookmarkData = newData
+            }
+        }
+        destinationPathString = url.path
+        return url
+    }
 
     /// Display name for the job (uses output filename or card name)
     var displayName: String {
@@ -769,7 +867,9 @@ struct ConversionJob: Identifiable, Codable {
         cardPath: URL,
         clips: [P2Clip],
         settings: ConversionSettings,
-        destinationURL: URL
+        destinationURL: URL,
+        cardBookmarkData: Data? = nil,
+        outputBookmarkData: Data? = nil
     ) {
         self.id = UUID()
         self.cardName = cardName
@@ -778,12 +878,47 @@ struct ConversionJob: Identifiable, Codable {
         self.settings = settings
         self.destinationPathString = destinationURL.path
         self.createdAt = Date()
+        self.cardBookmarkData = cardBookmarkData
+        self.outputBookmarkData = outputBookmarkData
+    }
+
+    /// Creates a job with security-scoped bookmarks from the provided URLs
+    /// - Note: Call this when the URLs have active security scope (e.g., from NSOpenPanel)
+    static func withBookmarks(
+        cardName: String,
+        cardPath: URL,
+        clips: [P2Clip],
+        settings: ConversionSettings,
+        destinationURL: URL
+    ) -> ConversionJob {
+        // Create security-scoped bookmarks while we have access
+        let cardBookmark = try? cardPath.bookmarkData(
+            options: .withSecurityScope,
+            includingResourceValuesForKeys: nil,
+            relativeTo: nil
+        )
+        let outputBookmark = try? destinationURL.deletingLastPathComponent().bookmarkData(
+            options: .withSecurityScope,
+            includingResourceValuesForKeys: nil,
+            relativeTo: nil
+        )
+
+        return ConversionJob(
+            cardName: cardName,
+            cardPath: cardPath,
+            clips: clips,
+            settings: settings,
+            destinationURL: destinationURL,
+            cardBookmarkData: cardBookmark,
+            outputBookmarkData: outputBookmark
+        )
     }
 
     // Codable keys
     enum CodingKeys: String, CodingKey {
         case id, cardName, cardPathString, clips, settings
         case destinationPathString, createdAt, status, progress, startedAt
+        case cardBookmarkData, outputBookmarkData
         case verificationStatus, verificationResult, verificationProgress
     }
 }

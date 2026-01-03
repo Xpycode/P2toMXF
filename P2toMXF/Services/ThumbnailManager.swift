@@ -150,16 +150,12 @@ actor ThumbnailManager {
     private func extractFrameWithSemaphore(from url: URL, atSeconds timestamp: Double) async -> NSImage? {
         // Wait for semaphore slot
         await acquireSemaphore()
+        defer { releaseSemaphore() }  // ALWAYS release, even on cancellation or error
 
         // Check for cancellation before starting expensive operation
-        if Task.isCancelled {
-            releaseSemaphore()
-            return nil
-        }
+        guard !Task.isCancelled else { return nil }
 
-        let result = await ffmpeg.extractFrame(from: url, atSeconds: timestamp)
-        releaseSemaphore()
-        return result
+        return await ffmpeg.extractFrame(from: url, atSeconds: timestamp)
     }
 
     // MARK: - Semaphore Implementation

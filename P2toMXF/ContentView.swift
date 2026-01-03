@@ -247,6 +247,18 @@ struct ContentView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
+                // Parse error warning
+                if card.hasParseErrors {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Text("\(card.parseErrors.count) clip(s) failed to load")
+                            .foregroundStyle(.orange)
+                    }
+                    .font(.caption)
+                    .help(card.parseErrors.map { "\($0.fileName): \($0.errorMessage)" }.joined(separator: "\n"))
+                }
+
                 Button(viewModel.allClipsSelected ? "Deselect All" : "Select All") {
                     if viewModel.allClipsSelected {
                         viewModel.deselectAllClips()
@@ -338,6 +350,13 @@ struct ContentView: View {
                     }
                     .labelsHidden()
                     .frame(width: 140)
+
+                    // Warning when audio mixing + MXF (will use FFmpeg instead of BMX)
+                    if viewModel.settings.audioMapping != .allChannels && viewModel.settings.outputContainer == .mxf {
+                        Image(systemName: "info.circle")
+                            .foregroundStyle(.orange)
+                            .help("Audio mixing requires FFmpeg instead of BMX for MXF output. This may affect MXF compatibility with some NLEs.")
+                    }
                 }
 
                 // Preserve TC checkbox

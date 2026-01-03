@@ -49,17 +49,22 @@ class P2CardParser {
             .filter { $0.pathExtension.uppercased() == "XML" }
 
         var clips: [P2Clip] = []
+        var parseErrors: [ClipParseError] = []
 
         for xmlFile in xmlFiles {
-            if let clip = try? parseClipXML(at: xmlFile, contentsPath: contentsPath) {
+            do {
+                let clip = try parseClipXML(at: xmlFile, contentsPath: contentsPath)
                 clips.append(clip)
+            } catch {
+                parseErrors.append(ClipParseError(file: xmlFile, error: error))
+                print("[P2CardParser] Failed to parse \(xmlFile.lastPathComponent): \(error.localizedDescription)")
             }
         }
 
         // Sort by timecode
         clips.sort { $0.startTimecode < $1.startTimecode }
 
-        return P2Card(rootPath: url, clips: clips)
+        return P2Card(rootPath: url, clips: clips, parseErrors: parseErrors)
     }
 
     /// Parses a single clip XML file and extracts metadata
