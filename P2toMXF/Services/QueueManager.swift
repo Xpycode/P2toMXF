@@ -110,17 +110,23 @@ class QueueManager: ObservableObject {
 
     // MARK: - Persistence
 
-    /// Saves the current queue to disk
+    /// Saves the current queue to disk (async to avoid blocking main thread)
     private func saveQueue() {
-        do {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            encoder.dateEncodingStrategy = .iso8601
+        // Capture current state for background task
+        let jobsToSave = self.jobs
+        let fileURL = self.queueFileURL
 
-            let data = try encoder.encode(jobs)
-            try data.write(to: queueFileURL, options: .atomic)
-        } catch {
-            print("Failed to save queue: \(error)")
+        Task.detached(priority: .background) {
+            do {
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                encoder.dateEncodingStrategy = .iso8601
+
+                let data = try encoder.encode(jobsToSave)
+                try data.write(to: fileURL, options: .atomic)
+            } catch {
+                print("Failed to save queue: \(error)")
+            }
         }
     }
 

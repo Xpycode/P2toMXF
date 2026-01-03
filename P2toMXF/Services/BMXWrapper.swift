@@ -31,37 +31,26 @@ class BMXWrapper {
 
     private var currentProcess: Process?
     private var isCancelling = false  // Flag to distinguish cancellation from failure
+    private let toolResolver = BundledToolResolver.shared
 
     /// Path to the bundled bmxtranswrap binary
     var bmxTranswrapPath: URL? {
-        if let bundledPath = Bundle.main.url(forResource: "bmxtranswrap", withExtension: nil) {
-            return bundledPath
-        }
-        return nil
+        toolResolver.path(for: .bmxtranswrap)
     }
 
     /// Path to the bundled mxf2raw binary
     var mxf2rawPath: URL? {
-        if let bundledPath = Bundle.main.url(forResource: "mxf2raw", withExtension: nil) {
-            return bundledPath
-        }
-        return nil
+        toolResolver.path(for: .mxf2raw)
     }
 
     /// Path to the lib directory containing BMX dylibs
     var libPath: URL? {
-        if let resourcePath = Bundle.main.resourcePath {
-            let libDir = URL(fileURLWithPath: resourcePath).appendingPathComponent("lib")
-            if FileManager.default.fileExists(atPath: libDir.path) {
-                return libDir
-            }
-        }
-        return nil
+        toolResolver.bmxLibPath
     }
 
     /// Checks if BMX tools are available
     var isBMXAvailable: Bool {
-        bmxTranswrapPath != nil && libPath != nil
+        toolResolver.isAvailable(BundledTool.bmxtranswrap) && toolResolver.bmxLibPath != nil
     }
 
     /// Rewraps a P2 clip (OPAtom) to a single OP1a MXF file
@@ -190,12 +179,8 @@ class BMXWrapper {
             process.executableURL = bmxURL
             process.arguments = arguments
 
-            // Set library path for BMX dylibs
-            if let libPath = self.libPath {
-                var env = ProcessInfo.processInfo.environment
-                env["DYLD_LIBRARY_PATH"] = libPath.path
-                process.environment = env
-            }
+            // Set library path for BMX dylibs using centralized resolver
+            process.environment = toolResolver.bmxEnvironment()
 
             let outputPipe = Pipe()
             let errorPipe = Pipe()
@@ -306,12 +291,8 @@ class BMXWrapper {
         process.executableURL = bmx
         process.arguments = ["-v"]
 
-        // Set library path
-        if let libPath = libPath {
-            var env = ProcessInfo.processInfo.environment
-            env["DYLD_LIBRARY_PATH"] = libPath.path
-            process.environment = env
-        }
+        // Set library path using centralized resolver
+        process.environment = toolResolver.bmxEnvironment()
 
         let pipe = Pipe()
         process.standardOutput = pipe

@@ -27,6 +27,7 @@
 		A0100000F /* VerificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000011 /* VerificationService.swift */; };
 		A01000010 /* EstimateSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000012 /* EstimateSheet.swift */; };
 		A01000011 /* CardListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000013 /* CardListView.swift */; };
+		A01000012 /* BundledToolResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000014 /* BundledToolResolver.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -52,6 +53,7 @@
 		A02000011 /* VerificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerificationService.swift; sourceTree = "<group>"; };
 		A02000012 /* EstimateSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EstimateSheet.swift; sourceTree = "<group>"; };
 		A02000013 /* CardListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardListView.swift; sourceTree = "<group>"; };
+		A02000014 /* BundledToolResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BundledToolResolver.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -130,6 +132,7 @@
 				A02000004 /* P2CardParser.swift */,
 				A02000005 /* FFmpegWrapper.swift */,
 				23438BE22F067E0400ACE31E /* BMXWrapper.swift */,
+				A02000014 /* BundledToolResolver.swift */,
 				A0200000C /* ThumbnailManager.swift */,
 				A0200000D /* QueueManager.swift */,
 				A02000010 /* SpeedTracker.swift */,
@@ -273,6 +276,7 @@
 				A0100000F /* VerificationService.swift in Sources */,
 				A01000010 /* EstimateSheet.swift in Sources */,
 				A01000011 /* CardListView.swift in Sources */,
+				A01000012 /* BundledToolResolver.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

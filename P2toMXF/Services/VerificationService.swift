@@ -37,35 +37,18 @@ class VerificationService {
 
     private var currentProcess: Process?
     private(set) var isCancelling = false
+    private let toolResolver = BundledToolResolver.shared
 
     // MARK: - Tool Paths
 
     /// Path to the bundled FFmpeg binary
     var ffmpegPath: URL? {
-        if let bundledPath = Bundle.main.url(forResource: "ffmpeg", withExtension: nil) {
-            return bundledPath
-        }
-        let homebrewPaths = ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"]
-        for path in homebrewPaths {
-            if FileManager.default.isExecutableFile(atPath: path) {
-                return URL(fileURLWithPath: path)
-            }
-        }
-        return nil
+        toolResolver.path(for: .ffmpeg)
     }
 
     /// Path to ffprobe (bundled or system)
     var ffprobePath: URL? {
-        if let bundledPath = Bundle.main.url(forResource: "ffprobe", withExtension: nil) {
-            return bundledPath
-        }
-        let homebrewPaths = ["/opt/homebrew/bin/ffprobe", "/usr/local/bin/ffprobe"]
-        for path in homebrewPaths {
-            if FileManager.default.isExecutableFile(atPath: path) {
-                return URL(fileURLWithPath: path)
-            }
-        }
-        return nil
+        toolResolver.path(for: .ffprobe)
     }
 
     // MARK: - Public API
@@ -238,7 +221,8 @@ class VerificationService {
         )
     }
 
-    /// Fallback container info using ffmpeg -i
+    /// Fallback container info using ffmpeg -i (when ffprobe is not available)
+    /// Parses stderr output to extract real container information
     private func getContainerInfoWithFFmpeg(
         fileURL: URL,
         logHandler: @escaping LogHandler
@@ -247,24 +231,114 @@ class VerificationService {
             throw VerificationError.ffmpegNotFound
         }
 
-        // ffmpeg -i outputs to stderr
-        let args = ["-i", fileURL.path]
+        // ffmpeg -i outputs info to stderr (and "fails" because no output file specified)
+        let stderrOutput = try await runProcessCapturingStderr(
+            at: ffmpeg,
+            arguments: ["-i", fileURL.path]
+        )
 
-        do {
-            _ = try await runProcess(at: ffmpeg, arguments: args, logHandler: { _ in })
-        } catch {
-            // ffmpeg -i always "fails" since there's no output, but we get info from stderr
+        // Parse the output for container info
+        return try parseFFmpegInfoOutput(stderrOutput, fileURL: fileURL, logHandler: logHandler)
+    }
+
+    /// Runs a process and captures stderr (for ffmpeg -i which outputs to stderr)
+    private func runProcessCapturingStderr(
+        at executable: URL,
+        arguments: [String]
+    ) async throws -> String {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
+            let process = Process()
+            process.executableURL = executable
+            process.arguments = arguments
+
+            let errorPipe = Pipe()
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = errorPipe
+
+            process.terminationHandler = { _ in
+                let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+                let errorOutput = String(data: errorData, encoding: .utf8) ?? ""
+                // Note: ffmpeg -i always exits with status 1 (no output file), but that's expected
+                continuation.resume(returning: errorOutput)
+            }
+
+            do {
+                try process.run()
+            } catch {
+                continuation.resume(throwing: error)
+            }
+        }
+    }
+
+    /// Parses ffmpeg -i output to extract container information
+    private func parseFFmpegInfoOutput(
+        _ output: String,
+        fileURL: URL,
+        logHandler: @escaping LogHandler
+    ) throws -> ContainerInfo {
+        // Extract format from "Input #0, format_name," line
+        var format = fileURL.pathExtension.uppercased()
+        if let formatMatch = output.range(of: #"Input #0, ([^,]+),"#, options: .regularExpression) {
+            let matched = String(output[formatMatch])
+            if let extracted = matched.components(separatedBy: ", ").dropFirst().first?.trimmingCharacters(in: .punctuationCharacters) {
+                format = extracted.uppercased()
+            }
         }
 
-        // Return basic info - actual parsing would require stderr capture
+        // Extract duration from "Duration: HH:MM:SS.ms" line
+        var durationSeconds: Double = 0
+        var durationStr = "--:--:--"
+        if let durationMatch = output.range(of: #"Duration: (\d{2}:\d{2}:\d{2}\.\d+)"#, options: .regularExpression) {
+            let matched = String(output[durationMatch])
+            if let timeStr = matched.components(separatedBy: ": ").last {
+                durationStr = String(timeStr.prefix(8))  // HH:MM:SS
+                durationSeconds = parseDurationToSeconds(timeStr)
+            }
+        }
+
+        // Count streams by looking for "Stream #0:" lines
+        let streamMatches = output.components(separatedBy: "Stream #0:")
+        let streamCount = max(1, streamMatches.count - 1)
+
+        // Extract frame rate from video stream line
+        var frameRate = 25.0
+        // Look for patterns like "25 fps", "50 fps", "29.97 fps"
+        if let fpsMatch = output.range(of: #"(\d+(?:\.\d+)?)\s*fps"#, options: .regularExpression) {
+            let fpsStr = String(output[fpsMatch]).replacingOccurrences(of: "fps", with: "").trimmingCharacters(in: .whitespaces)
+            if let fps = Double(fpsStr), fps > 0 {
+                frameRate = fps
+            }
+        }
+
+        let estimatedFrames = Int(durationSeconds * frameRate)
+
+        // Verify we got meaningful data (at least duration should be parsed)
+        if durationSeconds == 0 && !output.contains("Duration:") {
+            logHandler("Warning: Could not parse container info from ffmpeg output")
+            logHandler("FFmpeg output: \(output.prefix(500))...")
+            throw VerificationError.containerInvalid("Could not parse container information (ffprobe not available)")
+        }
+
         return ContainerInfo(
-            format: fileURL.pathExtension.uppercased(),
-            streams: 2,  // Assume video + audio
-            duration: "--:--:--",
-            durationSeconds: 0,
-            estimatedFrames: 0,
-            frameRate: 25.0
+            format: format,
+            streams: streamCount,
+            duration: durationStr,
+            durationSeconds: durationSeconds,
+            estimatedFrames: estimatedFrames,
+            frameRate: frameRate
         )
+    }
+
+    /// Parses duration string "HH:MM:SS.ms" to seconds
+    private func parseDurationToSeconds(_ durationStr: String) -> Double {
+        let parts = durationStr.split(separator: ":")
+        guard parts.count == 3 else { return 0 }
+
+        let hours = Double(parts[0]) ?? 0
+        let minutes = Double(parts[1]) ?? 0
+        let seconds = Double(parts[2]) ?? 0
+
+        return hours * 3600 + minutes * 60 + seconds
     }
 
     // MARK: - Decode Tests

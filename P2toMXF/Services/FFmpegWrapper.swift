@@ -54,32 +54,16 @@ class FFmpegWrapper {
         set { cancelLock.withLock { _isCancelling = newValue } }
     }
     private let bmxWrapper = BMXWrapper()
+    private let toolResolver = BundledToolResolver.shared
 
     /// Path to the bundled FFmpeg binary
     var ffmpegPath: URL? {
-        // First check app bundle Resources
-        if let bundledPath = Bundle.main.url(forResource: "ffmpeg", withExtension: nil) {
-            return bundledPath
-        }
-
-        // Fallback: check common Homebrew locations
-        let homebrewPaths = [
-            "/opt/homebrew/bin/ffmpeg",  // Apple Silicon
-            "/usr/local/bin/ffmpeg"       // Intel
-        ]
-
-        for path in homebrewPaths {
-            if FileManager.default.isExecutableFile(atPath: path) {
-                return URL(fileURLWithPath: path)
-            }
-        }
-
-        return nil
+        toolResolver.path(for: .ffmpeg)
     }
 
     /// Checks if FFmpeg is available
     var isFFmpegAvailable: Bool {
-        ffmpegPath != nil
+        toolResolver.isAvailable(.ffmpeg)
     }
 
     /// Converts a P2 clip to a single MXF file
@@ -555,19 +539,23 @@ class FFmpegWrapper {
         return metrics
     }
 
-    /// Thread-safe container for collecting FFmpeg stderr output.
+    /// Thread-safe container for collecting FFmpeg stderr output with throttled progress updates.
     ///
     /// # Threading Contract
     /// This class is marked `@unchecked Sendable` because it manually implements
     /// thread-safety using `NSLock`:
     /// - `append(_:)` and `output` are synchronized via the internal lock
     /// - Safe to call from any thread or dispatch queue
-    /// - All mutable state (`_output`) is protected by the lock
+    /// - All mutable state (`_output`, `lastProgressUpdate`) is protected by the lock
     ///
     /// **Warning:** Do not add properties without updating lock usage.
     private final class OutputCollector: @unchecked Sendable {
         private let lock = NSLock()
         private var _output = ""
+        private var _lastProgressUpdate = Date.distantPast
+
+        /// Minimum interval between progress updates (10 updates/second = 0.1s)
+        private let progressThrottleInterval: TimeInterval = 0.1
 
         func append(_ string: String) {
             lock.lock()
@@ -579,6 +567,18 @@ class FFmpegWrapper {
             lock.lock()
             defer { lock.unlock() }
             return _output
+        }
+
+        /// Returns true if enough time has passed since last progress update
+        func shouldUpdateProgress() -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            let now = Date()
+            if now.timeIntervalSince(_lastProgressUpdate) >= progressThrottleInterval {
+                _lastProgressUpdate = now
+                return true
+            }
+            return false
         }
     }
 
@@ -629,6 +629,9 @@ class FFmpegWrapper {
                     let metrics = self.parseFFmpegOutput(str)
 
                     if let frame = metrics.frame {
+                        // Throttle UI updates to 10/second to reduce main thread overhead
+                        guard errorCollector.shouldUpdateProgress() else { return }
+
                         // Calculate progress based on frame count
                         let estimatedProgress: Double
                         if let total = totalFrames, total > 0 {

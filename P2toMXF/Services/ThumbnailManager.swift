@@ -26,6 +26,11 @@ actor ThumbnailManager {
     private var cache: [UUID: ClipThumbnails] = [:]
     private var pendingTasks: [UUID: Task<ClipThumbnails, Never>] = [:]
 
+    /// LRU cache eviction - tracks access order (most recent at end)
+    private var accessOrder: [UUID] = []
+    /// Maximum number of clips to cache thumbnails for
+    private let maxCacheSize = 100
+
     /// Semaphore to limit concurrent FFmpeg processes
     private let maxConcurrentExtractions = 3
     private var activeExtractions = 0
@@ -45,6 +50,8 @@ actor ThumbnailManager {
     func getThumbnails(for clip: P2Clip) async -> ClipThumbnails {
         // Return cached result if available
         if let cached = cache[clip.id] {
+            // Update LRU access order (move to most recent)
+            updateAccessOrder(for: clip.id)
             return cached
         }
 
@@ -61,9 +68,33 @@ actor ThumbnailManager {
 
         let result = await task.value
         pendingTasks[clip.id] = nil
+
+        // Store in cache with LRU tracking
         cache[clip.id] = result
+        updateAccessOrder(for: clip.id)
+
+        // Evict oldest entries if cache exceeds limit
+        evictOldestIfNeeded()
 
         return result
+    }
+
+    // MARK: - LRU Cache Management
+
+    /// Updates access order for LRU tracking (moves clip to most recently used)
+    private func updateAccessOrder(for clipId: UUID) {
+        // Remove existing entry (if present)
+        accessOrder.removeAll { $0 == clipId }
+        // Add to end (most recently used)
+        accessOrder.append(clipId)
+    }
+
+    /// Evicts oldest cache entries if cache exceeds maximum size
+    private func evictOldestIfNeeded() {
+        while cache.count > maxCacheSize, let oldest = accessOrder.first {
+            accessOrder.removeFirst()
+            cache.removeValue(forKey: oldest)
+        }
     }
 
     /// Cancel pending thumbnail extraction for a clip (e.g., when row scrolls off screen)
@@ -75,6 +106,7 @@ actor ThumbnailManager {
     /// Clear all cached thumbnails (e.g., when loading a new P2 card)
     func clearCache() {
         cache.removeAll()
+        accessOrder.removeAll()
         for task in pendingTasks.values {
             task.cancel()
         }
