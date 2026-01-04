@@ -916,12 +916,13 @@ struct ConversionJob: Identifiable, Codable {
         return url
     }
 
-    /// Display name for the job (uses output filename or card name)
+    /// Display name for the job (uses output filename)
     var displayName: String {
         if settings.processingMode == .individual {
             return "\(cardName) (\(clips.count) clips)"
         } else {
-            return destinationURL.deletingPathExtension().lastPathComponent
+            // Show full filename with extension for concatenate mode
+            return destinationURL.lastPathComponent
         }
     }
 

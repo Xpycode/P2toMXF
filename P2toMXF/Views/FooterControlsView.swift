@@ -120,7 +120,7 @@ struct FooterControlsView: View {
                     Text(outputDir.lastPathComponent)
                         .lineLimit(1)
                         .truncationMode(.middle)
-                        .frame(maxWidth: 150, alignment: .leading)
+                        .frame(minWidth: 120, maxWidth: 280, alignment: .leading)
                 } else {
                     Text("Not selected")
                         .foregroundStyle(.secondary)

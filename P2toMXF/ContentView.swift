@@ -97,7 +97,7 @@ struct ContentView: View {
                 .frame(height: 150)
             }
         }
-        .frame(minWidth: 1150)
+        .frame(minWidth: 1280)
         .animation(.easeInOut(duration: 0.2), value: showConsole)
         .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
             Button("OK") { viewModel.errorMessage = nil }
