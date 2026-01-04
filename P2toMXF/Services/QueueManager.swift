@@ -788,8 +788,20 @@ class QueueManager: ObservableObject {
                 try await verifyIndividualJobOutputs(job: job, index: index, mode: mode)
             } else {
                 // For concatenate mode, verify single output file
+                // Handle legacy jobs where destinationURL might be a directory
+                var fileURL = job.destinationURL
+                var isDirectory: ObjCBool = false
+                if FileManager.default.fileExists(atPath: fileURL.path, isDirectory: &isDirectory), isDirectory.boolValue {
+                    // destinationURL is a directory - find the actual output file
+                    let ext = job.settings.outputContainer.fileExtension
+                    let baseName = job.destinationURL.lastPathComponent
+                    let fileName = "\(baseName).\(ext)"
+                    fileURL = fileURL.appendingPathComponent(fileName)
+                    log("Note: Using constructed path: \(fileURL.lastPathComponent)")
+                }
+
                 let result = try await verificationService.verify(
-                    fileURL: job.destinationURL,
+                    fileURL: fileURL,
                     mode: mode,
                     expectedFrames: job.totalDurationFrames,
                     progress: { [weak self] progress, message in
