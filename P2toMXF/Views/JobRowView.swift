@@ -153,26 +153,8 @@ struct JobRowView: View {
                     .font(.caption2)
                     .foregroundStyle(.green)
 
-                // Verify menu
-                Menu {
-                    Button {
-                        queueManager.verifyJob(job.id, mode: .quick)
-                    } label: {
-                        Label("Quick Verify", systemImage: "bolt")
-                    }
-                    Button {
-                        queueManager.verifyJob(job.id, mode: .full)
-                    } label: {
-                        Label("Full Verify", systemImage: "checkmark.seal")
-                    }
-                } label: {
-                    Image(systemName: "checkmark.seal")
-                        .font(.caption)
-                        .foregroundStyle(.blue)
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .help("Verify output file")
+                // Verify menu - use Picker-style menu for better click handling
+                verifyMenuButton(isRetry: false)
             }
 
         case .verifying:
@@ -185,14 +167,7 @@ struct JobRowView: View {
             }
 
         case .verified:
-            HStack(spacing: 4) {
-                Image(systemName: "checkmark.seal.fill")
-                    .foregroundStyle(.green)
-                Text("Verified")
-                    .font(.caption2)
-                    .foregroundStyle(.green)
-            }
-            .help(job.verificationResult?.summary ?? "File verified successfully")
+            verifiedContent
 
         case .failed(let error):
             HStack(spacing: 4) {
@@ -204,25 +179,107 @@ struct JobRowView: View {
                     .help(error)
 
                 // Retry verification
-                Menu {
-                    Button {
-                        queueManager.verifyJob(job.id, mode: .quick)
-                    } label: {
-                        Label("Retry Quick", systemImage: "bolt")
-                    }
-                    Button {
-                        queueManager.verifyJob(job.id, mode: .full)
-                    } label: {
-                        Label("Retry Full", systemImage: "checkmark.seal")
-                    }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.caption2)
-                        .foregroundStyle(.blue)
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
+                verifyMenuButton(isRetry: true)
             }
+        }
+    }
+
+    // MARK: - Verify Menu Button
+
+    /// Creates a verify menu button with proper click handling
+    /// Using Button + contextMenu pattern to avoid SwiftUI Menu click issues
+    @ViewBuilder
+    private func verifyMenuButton(isRetry: Bool) -> some View {
+        Menu {
+            Button {
+                queueManager.verifyJob(job.id, mode: .quick)
+            } label: {
+                Label(isRetry ? "Retry Quick" : "Quick Verify", systemImage: "bolt")
+            }
+            Button {
+                queueManager.verifyJob(job.id, mode: .full)
+            } label: {
+                Label(isRetry ? "Retry Full" : "Full Verify", systemImage: "checkmark.seal")
+            }
+        } label: {
+            Image(systemName: isRetry ? "arrow.clockwise" : "checkmark.seal")
+                .font(.caption)
+                .foregroundStyle(.blue)
+                .frame(width: 20, height: 20)  // Explicit hit target
+                .contentShape(Rectangle())
+        }
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(isRetry ? "Retry verification" : "Verify output file")
+        .id("\(job.id)-verify-\(isRetry)")  // Stable identity for SwiftUI
+    }
+
+    // MARK: - Verified Content
+
+    /// Content shown when verification passed - shows details + re-verify option
+    @ViewBuilder
+    private var verifiedContent: some View {
+        HStack(spacing: 6) {
+            if let result = job.verificationResult {
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .foregroundStyle(.green)
+
+                    VStack(alignment: .trailing, spacing: 0) {
+                        Text("Verified")
+                            .font(.caption2.bold())
+                            .foregroundStyle(.green)
+
+                        // Show verification details (mode + speed)
+                        HStack(spacing: 2) {
+                            Text(result.mode.rawValue)
+                                .font(.system(size: 8))
+                                .foregroundStyle(.secondary)
+                            if let speed = result.decodingSpeed {
+                                Text("•")
+                                    .font(.system(size: 8))
+                                    .foregroundStyle(.tertiary)
+                                Text(speed)
+                                    .font(.system(size: 8).monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+                .help(result.summary)
+            } else {
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .foregroundStyle(.green)
+                    Text("Verified")
+                        .font(.caption2)
+                        .foregroundStyle(.green)
+                }
+            }
+
+            // Re-verify menu (allows running different verification mode)
+            Menu {
+                Button {
+                    queueManager.verifyJob(job.id, mode: .quick)
+                } label: {
+                    Label("Re-verify (Quick)", systemImage: "bolt")
+                }
+                Button {
+                    queueManager.verifyJob(job.id, mode: .full)
+                } label: {
+                    Label("Re-verify (Full)", systemImage: "checkmark.seal")
+                }
+            } label: {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 16, height: 16)
+                    .contentShape(Rectangle())
+            }
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("Run verification again")
+            .id("\(job.id)-reverify")
         }
     }
 

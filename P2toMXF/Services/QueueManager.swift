@@ -396,6 +396,31 @@ class QueueManager: ObservableObject {
         saveQueue()
     }
 
+    /// Stops all queue processing - cancels current job and all pending jobs
+    func stopAllProcessing() {
+        // Cancel current job if running
+        if let jobId = currentJobId,
+           let index = jobs.firstIndex(where: { $0.id == jobId }) {
+            ffmpeg.cancelConversion()
+            jobs[index].status = .cancelled
+            jobs[index].progress = 0
+            log("Cancelled active job: \(jobs[index].displayName)")
+        }
+
+        // Cancel all pending jobs
+        var pendingCount = 0
+        for index in jobs.indices where jobs[index].status == .pending {
+            jobs[index].status = .cancelled
+            pendingCount += 1
+        }
+        if pendingCount > 0 {
+            log("Cancelled \(pendingCount) pending job\(pendingCount == 1 ? "" : "s")")
+        }
+
+        saveQueue()
+        log("=== All queue processing stopped ===")
+    }
+
     /// Starts processing the queue (manual trigger)
     func startQueue() {
         guard !isProcessing, hasPendingJobs else { return }
@@ -792,12 +817,33 @@ class QueueManager: ObservableObject {
                 var fileURL = job.destinationURL
                 var isDirectory: ObjCBool = false
                 if FileManager.default.fileExists(atPath: fileURL.path, isDirectory: &isDirectory), isDirectory.boolValue {
-                    // destinationURL is a directory - find the actual output file
+                    // destinationURL is a directory - search for matching output file
                     let ext = job.settings.outputContainer.fileExtension
-                    let baseName = job.destinationURL.lastPathComponent
-                    let fileName = "\(baseName).\(ext)"
-                    fileURL = fileURL.appendingPathComponent(fileName)
-                    log("Note: Using constructed path: \(fileURL.lastPathComponent)")
+                    // Determine base name to search for
+                    let baseName: String
+                    if !job.settings.outputFilename.isEmpty {
+                        baseName = job.settings.outputFilename
+                    } else if job.settings.useFolderNameAsFilename {
+                        baseName = job.cardName
+                    } else {
+                        baseName = job.cardName
+                    }
+
+                    // Search for files matching the base name pattern
+                    let foundFile = findMatchingOutputFile(
+                        inDirectory: job.destinationURL,
+                        baseName: baseName,
+                        extension: ext
+                    )
+
+                    if let found = foundFile {
+                        fileURL = found
+                        log("Found output file: \(fileURL.lastPathComponent)")
+                    } else {
+                        // Fallback to constructed path (will likely fail but shows clear error)
+                        fileURL = job.destinationURL.appendingPathComponent("\(baseName).\(ext)")
+                        log("Warning: No matching file found, trying: \(fileURL.lastPathComponent)")
+                    }
                 }
 
                 let result = try await verificationService.verify(
@@ -900,5 +946,55 @@ class QueueManager: ObservableObject {
             jobs[index].verificationProgress = 0
         }
         isVerifying = false
+    }
+
+    // MARK: - File Search Helpers
+
+    /// Finds a matching output file in a directory based on base name pattern
+    /// Searches for files that start with the base name and have the correct extension
+    /// Handles group suffixes like " - Group 1" or "_03" that may have been added
+    private func findMatchingOutputFile(
+        inDirectory directory: URL,
+        baseName: String,
+        extension ext: String
+    ) -> URL? {
+        let fm = FileManager.default
+        guard let contents = try? fm.contentsOfDirectory(atPath: directory.path) else {
+            return nil
+        }
+
+        // Filter for files with matching extension
+        let matchingFiles = contents.filter { filename in
+            filename.lowercased().hasSuffix(".\(ext)")
+        }
+
+        // First, look for exact match
+        let exactName = "\(baseName).\(ext)"
+        if matchingFiles.contains(exactName) {
+            return directory.appendingPathComponent(exactName)
+        }
+
+        // Look for files that start with the base name (handles group suffixes)
+        // Sort by name to get consistent results
+        let candidates = matchingFiles.filter { filename in
+            filename.hasPrefix(baseName)
+        }.sorted()
+
+        // Return the first match if any
+        if let firstMatch = candidates.first {
+            return directory.appendingPathComponent(firstMatch)
+        }
+
+        // Also try matching with cardName variations (spaces, underscores)
+        let normalizedBaseName = baseName.replacingOccurrences(of: " ", with: "")
+        let fallbackCandidates = matchingFiles.filter { filename in
+            filename.replacingOccurrences(of: " ", with: "").hasPrefix(normalizedBaseName)
+        }.sorted()
+
+        if let fallbackMatch = fallbackCandidates.first {
+            return directory.appendingPathComponent(fallbackMatch)
+        }
+
+        return nil
     }
 }

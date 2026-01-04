@@ -114,9 +114,17 @@ struct ClipRowView: View {
             .layoutPriority(1)
 
             // Conversion status (updates frequently during conversion)
-            if let status = status {
-                ClipStatusBadge(status: status)
+            // Reserve fixed width to prevent layout shifts when status appears/changes
+            // Width: 60px progress bar + 6px spacing + ~35px for "100%" text = ~100px minimum
+            // Use 120px to have margin for variations
+            Group {
+                if let status = status {
+                    ClipStatusBadge(status: status)
+                } else {
+                    Color.clear
+                }
             }
+            .frame(width: 120, alignment: .trailing)
         }
         .padding(.vertical, 4)
     }
@@ -140,6 +148,7 @@ private struct ClipThumbnailsView: View {
             thumbnailView(image: thumbnails?.first, label: "IN")
             thumbnailView(image: thumbnails?.last, label: "OUT")
         }
+        .drawingGroup()  // Cache rendered content to prevent jitter during sibling updates
         .task(id: clip.id) {
             // Lazy load thumbnails when row becomes visible
             guard thumbnails == nil else { return }

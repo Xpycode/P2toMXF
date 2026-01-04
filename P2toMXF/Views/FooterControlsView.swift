@@ -116,6 +116,11 @@ struct FooterControlsView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize()
 
+                Button("Choose...") {
+                    showingOutputPicker = true
+                }
+                .controlSize(.small)
+
                 if let outputDir = viewModel.settings.outputDirectory {
                     Text(outputDir.lastPathComponent)
                         .lineLimit(1)
@@ -125,11 +130,6 @@ struct FooterControlsView: View {
                     Text("Not selected")
                         .foregroundStyle(.secondary)
                 }
-
-                Button("Choose...") {
-                    showingOutputPicker = true
-                }
-                .controlSize(.small)
             }
 
             // Output filename (only in concatenate mode)
@@ -201,18 +201,29 @@ struct FooterControlsView: View {
     @ViewBuilder
     private var actionRow: some View {
         if isAnyConversionActive {
-            // Progress panel with cancel button
+            // Progress panel with cancel buttons
             HStack(spacing: 16) {
                 ProgressControlPanel(
                     metrics: activeProgressMetrics,
                     onCancel: cancelActiveConversion
                 )
 
-                Button("Stop") {
-                    cancelActiveConversion()
+                // Show "Stop All" when there are pending jobs in addition to active
+                if queueManager.pendingCount > 0 {
+                    Button("Stop All") {
+                        queueManager.stopAllProcessing()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .help("Stop current job and cancel all \(queueManager.pendingCount) pending")
+                } else {
+                    Button("Stop") {
+                        cancelActiveConversion()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .help("Stop current job")
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
             }
         } else {
             // Normal action buttons

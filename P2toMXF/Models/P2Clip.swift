@@ -887,11 +887,14 @@ struct ConversionJob: Identifiable, Codable {
         return url
     }
 
-    /// Resolves the output bookmark to a security-scoped URL
-    /// - Returns: URL with security scope, or nil if bookmark is invalid/stale
+    /// Resolves the output bookmark to a security-scoped URL for the output directory
+    /// - Returns: URL with security scope for the output directory, or the directory from destinationPathString
+    /// - Note: This returns the directory URL for security-scoped access, NOT the file URL.
+    ///   The destinationPathString (file path) is NOT modified by this method.
     mutating func resolveOutputBookmark() -> URL? {
         guard let data = outputBookmarkData else {
-            return URL(fileURLWithPath: destinationPathString)
+            // No bookmark data - return the parent directory of the destination file
+            return URL(fileURLWithPath: destinationPathString).deletingLastPathComponent()
         }
         var isStale = false
         guard let url = try? URL(
@@ -912,7 +915,9 @@ struct ConversionJob: Identifiable, Codable {
                 outputBookmarkData = newData
             }
         }
-        destinationPathString = url.path
+        // Note: Do NOT update destinationPathString here!
+        // The bookmark is for the OUTPUT DIRECTORY, not the file.
+        // destinationPathString should preserve the full file path with filename.
         return url
     }
 
@@ -921,8 +926,25 @@ struct ConversionJob: Identifiable, Codable {
         if settings.processingMode == .individual {
             return "\(cardName) (\(clips.count) clips)"
         } else {
-            // Show full filename with extension for concatenate mode
-            return destinationURL.lastPathComponent
+            // For concatenate mode, check if destinationURL is a proper file path
+            let ext = settings.outputContainer.fileExtension
+            let lastComponent = destinationURL.lastPathComponent
+
+            // If it already has the correct extension, use it as-is
+            if lastComponent.lowercased().hasSuffix(".\(ext)") {
+                return lastComponent
+            }
+
+            // Old job format - destinationURL is a directory, construct filename
+            let baseName: String
+            if !settings.outputFilename.isEmpty {
+                baseName = settings.outputFilename
+            } else if settings.useFolderNameAsFilename {
+                baseName = cardName
+            } else {
+                baseName = cardName
+            }
+            return "\(baseName).\(ext)"
         }
     }
 
