@@ -14,19 +14,13 @@ struct JobRowView: View {
                 .frame(width: 20)
 
             // Job info
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(job.displayName)
                     .font(.caption.bold())
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
 
-                HStack(spacing: 8) {
-                    Text(job.cardName)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-
-                    Text("\u{2022}")
-                        .foregroundStyle(.tertiary)
-
+                HStack(spacing: 6) {
                     Text("\(job.clips.count) clips")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -40,13 +34,13 @@ struct JobRowView: View {
                 }
             }
 
-            Spacer()
+            Spacer(minLength: 8)
 
             // Progress or action button
             trailingContent
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.vertical, 8)
         .background(backgroundColor)
         .contentShape(Rectangle())
     }

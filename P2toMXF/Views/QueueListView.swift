@@ -162,7 +162,6 @@ struct QueueListView: View {
             }
             .padding(.vertical, 4)
         }
-        .frame(maxHeight: 200)
     }
 
     // MARK: - Queue Controls

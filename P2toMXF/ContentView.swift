@@ -59,7 +59,7 @@ struct ContentView: View {
                     if showQueue {
                         Divider()
                         QueueListView()
-                            .frame(minWidth: 220, idealWidth: 280, maxWidth: 350)
+                            .frame(minWidth: 280, idealWidth: 350, maxWidth: 450)
                     }
                 }
 
@@ -84,7 +84,7 @@ struct ContentView: View {
                     }
                 }
             }
-            .frame(minHeight: 900)  // Main content maintains minimum height
+            .frame(minHeight: 900)  // Main content maintains minimum 2
 
             // Console drawer - extends window when visible
             if showConsole {
