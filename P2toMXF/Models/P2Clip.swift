@@ -232,7 +232,9 @@ struct P2Card: Identifiable, Codable {
 
 /// A group of clips representing a single recording session
 struct RecordGroup: Identifiable {
-    let id = UUID()
+    // Derive ID from first clip for stable identity across recomputes
+    // This prevents SwiftUI from treating groups as new items on every access
+    var id: UUID { clips.first?.id ?? UUID() }
     let clips: [P2Clip]
     let groupIndex: Int  // 1-based for display
     let groupType: GroupType
@@ -422,8 +424,13 @@ struct ProgressMetrics {
     /// When the conversion started
     var startTime: Date?
 
+    /// Last time the metrics were touched (for triggering elapsed time updates in @Observable)
+    var lastUpdateTime: Date?
+
     /// Elapsed time in seconds since start
     var elapsedSeconds: TimeInterval {
+        // Touch lastUpdateTime to ensure this computed property updates when timer fires
+        _ = lastUpdateTime
         guard let start = startTime else { return 0 }
         return Date().timeIntervalSince(start)
     }
