@@ -147,8 +147,7 @@ struct QueueListView: View {
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Job List
