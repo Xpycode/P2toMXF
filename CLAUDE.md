@@ -833,3 +833,71 @@ if FileManager.default.fileExists(atPath: fileURL.path, isDirectory: &isDirector
 
 ### SwiftUI Performance Insight
 When a view property changes frequently (like progress), extract static content into separate child views. SwiftUI only re-renders views whose inputs change - isolated views with stable inputs won't redraw even when sibling views update.
+
+---
+
+## Session Log: 2026-01-04 (Verification & Display Fixes)
+
+### Overview
+Fixed critical bug where job names lost their suffixes after processing started, and enhanced verification UI with re-verify capability.
+
+### Commits
+- `bc7f722` - Fix job display names and enhance verification UI
+
+### Issues Fixed
+
+#### 1. Job Names Losing Suffix After Completion (Critical)
+**Problem**: Jobs created with suffixes like `_01`, `_02`, `_03` for multiple groups would all display the same name (just the base directory name) after processing started.
+**Root Cause**: `resolveOutputBookmark()` in `ConversionJob` was storing a security-scoped bookmark for the OUTPUT DIRECTORY (for write access), but when resolving it, the method incorrectly overwrote `destinationPathString` (the full FILE path) with the directory path.
+```swift
+// BUG: This line overwrote file path with directory path
+destinationPathString = url.path  // url was directory, not file!
+```
+**Fix**: Removed the line that overwrote `destinationPathString`. The method now only returns the directory URL for security-scoped access without modifying the stored file path.
+
+#### 2. Cannot Re-verify Already Verified Jobs
+**Problem**: After running Quick Verify on a job, the verify menu disappeared (replaced by "Verified" text), preventing users from running Full Verify.
+**Fix**: Added re-verify menu (↻ icon) to the verified state, allowing users to run Quick or Full verification again on already-verified jobs.
+
+#### 3. Verification Details Not Shown
+**Problem**: After verification completed, only "Verified" was shown with no details.
+**Fix**: Now shows verification mode (Quick/Full) and decoding speed (e.g., "15x") below the Verified label. Full details in tooltip.
+
+### Key Code Changes
+
+#### P2Clip.swift - resolveOutputBookmark()
+```swift
+// Before (BUG):
+destinationPathString = url.path  // Overwrote file path with directory!
+return url
+
+// After (FIXED):
+// Do NOT update destinationPathString here!
+// The bookmark is for the OUTPUT DIRECTORY, not the file.
+return url
+```
+
+#### JobRowView.swift - Verified State
+```swift
+// Added re-verify menu to verified content
+Menu {
+    Button { queueManager.verifyJob(job.id, mode: .quick) } 
+    Button { queueManager.verifyJob(job.id, mode: .full) }
+} label: {
+    Image(systemName: "arrow.clockwise")
+}
+```
+
+### Files Modified
+- `P2toMXF/Models/P2Clip.swift` - Fixed resolveOutputBookmark() to not overwrite file path
+- `P2toMXF/Views/JobRowView.swift` - Added re-verify menu, verification details display
+- `P2toMXF/Views/FooterControlsView.swift` - Added Stop All button
+- `P2toMXF/Services/QueueManager.swift` - Added stopAllProcessing() method
+
+### Architecture Insight
+Security-scoped bookmarks for file access require careful handling:
+- Card bookmark → points to card directory (correct to update path)
+- Output bookmark → points to output DIRECTORY for write access
+- But `destinationPathString` should store the full FILE path (with filename)
+
+The bug occurred because both `resolveCardBookmark()` and `resolveOutputBookmark()` were updating their respective path strings, but only the card path should be updated (since it IS a directory). The destination path must preserve the filename.
