@@ -93,23 +93,14 @@ struct ClipRowView: View {
     let status: ConversionStatus?
     let thumbnailManager: ThumbnailManager
 
-    @State private var thumbnails: ThumbnailManager.ClipThumbnails?
-    @State private var isLoadingThumbnails = false
-
-    private let thumbnailHeight: CGFloat = 45
-    private let thumbnailWidth: CGFloat = 80  // 16:9 aspect at 45px height
-
     var body: some View {
         HStack(spacing: 12) {
             // Selection indicator
             Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                 .foregroundStyle(isSelected ? .blue : .secondary)
 
-            // Thumbnails (first & last frame)
-            HStack(spacing: 2) {
-                thumbnailView(image: thumbnails?.first, label: "IN")
-                thumbnailView(image: thumbnails?.last, label: "OUT")
-            }
+            // Thumbnails (isolated to prevent redraws from status updates)
+            ClipThumbnailsView(clip: clip, thumbnailManager: thumbnailManager)
 
             // Clip info
             VStack(alignment: .leading, spacing: 2) {
@@ -122,12 +113,33 @@ struct ClipRowView: View {
             }
             .layoutPriority(1)
 
-            // Conversion status
+            // Conversion status (updates frequently during conversion)
             if let status = status {
-                statusBadge(for: status)
+                ClipStatusBadge(status: status)
             }
         }
         .padding(.vertical, 4)
+    }
+}
+
+// MARK: - Clip Thumbnails View (Isolated)
+
+/// Isolated thumbnail view that doesn't redraw when status changes
+private struct ClipThumbnailsView: View {
+    let clip: P2Clip
+    let thumbnailManager: ThumbnailManager
+
+    @State private var thumbnails: ThumbnailManager.ClipThumbnails?
+    @State private var isLoadingThumbnails = false
+
+    private let thumbnailHeight: CGFloat = 45
+    private let thumbnailWidth: CGFloat = 80  // 16:9 aspect at 45px height
+
+    var body: some View {
+        HStack(spacing: 2) {
+            thumbnailView(image: thumbnails?.first, label: "IN")
+            thumbnailView(image: thumbnails?.last, label: "OUT")
+        }
         .task(id: clip.id) {
             // Lazy load thumbnails when row becomes visible
             guard thumbnails == nil else { return }
@@ -144,8 +156,6 @@ struct ClipRowView: View {
             }
         }
     }
-
-    // MARK: - Thumbnail View
 
     @ViewBuilder
     private func thumbnailView(image: NSImage?, label: String) -> some View {
@@ -191,11 +201,15 @@ struct ClipRowView: View {
         .frame(width: thumbnailWidth, height: thumbnailHeight)
         .cornerRadius(4)
     }
+}
 
-    // MARK: - Status Badge
+// MARK: - Clip Status Badge (Isolated)
 
-    @ViewBuilder
-    private func statusBadge(for status: ConversionStatus) -> some View {
+/// Isolated status badge that handles frequent progress updates
+private struct ClipStatusBadge: View {
+    let status: ConversionStatus
+
+    var body: some View {
         switch status {
         case .pending:
             Text("Pending")
