@@ -72,11 +72,23 @@ struct ReportGenerator {
         return reportURL
     }
 
-    /// Get the report URL for a given output file
+    /// Get the report URL for a given output file or directory
+    /// - For individual mode: outputURL is a directory, report goes in that directory
+    /// - For concatenate mode: outputURL is a file, report goes alongside it
     static func reportURL(for outputURL: URL) -> URL {
-        let directory = outputURL.deletingLastPathComponent()
-        let baseName = outputURL.deletingPathExtension().lastPathComponent
-        return directory.appendingPathComponent("\(baseName)_report.xml")
+        var isDirectory: ObjCBool = false
+        let exists = FileManager.default.fileExists(atPath: outputURL.path, isDirectory: &isDirectory)
+
+        if exists && isDirectory.boolValue {
+            // Individual mode: outputURL is the output directory
+            let dirName = outputURL.lastPathComponent
+            return outputURL.appendingPathComponent("\(dirName)_report.xml")
+        } else {
+            // Concatenate mode: outputURL is the output file
+            let directory = outputURL.deletingLastPathComponent()
+            let baseName = outputURL.deletingPathExtension().lastPathComponent
+            return directory.appendingPathComponent("\(baseName)_report.xml")
+        }
     }
 
     // MARK: - Private Helpers

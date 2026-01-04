@@ -450,11 +450,48 @@ class VerificationService {
 
         logHandler("Full decode: expecting ~\(expectedFrames) frames")
 
-        // Use hardware acceleration if available (VideoToolbox on macOS)
+        // Try hardware decode first (VideoToolbox on macOS)
+        let hardwareResult = await tryDecode(
+            ffmpeg: ffmpeg,
+            fileURL: fileURL,
+            useHardware: true,
+            expectedFrames: expectedFrames,
+            progress: progress,
+            logHandler: logHandler
+        )
+
+        // If hardware decode failed with VideoToolbox error, retry with software
+        if !hardwareResult.success,
+           let errorMsg = hardwareResult.errorMessage,
+           errorMsg.contains("VideoToolbox") || errorMsg.contains("hwaccel") {
+            logHandler("Hardware decode failed, retrying with software decode...")
+            return await tryDecode(
+                ffmpeg: ffmpeg,
+                fileURL: fileURL,
+                useHardware: false,
+                expectedFrames: expectedFrames,
+                progress: progress,
+                logHandler: logHandler
+            )
+        }
+
+        return hardwareResult
+    }
+
+    /// Attempts to decode a file with optional hardware acceleration
+    private func tryDecode(
+        ffmpeg: URL,
+        fileURL: URL,
+        useHardware: Bool,
+        expectedFrames: Int,
+        progress: @escaping ProgressHandler,
+        logHandler: @escaping LogHandler
+    ) async -> DecodeResult {
         var args = [String]()
 
-        // Try hardware decode first
-        args.append(contentsOf: ["-hwaccel", "videotoolbox"])
+        if useHardware {
+            args.append(contentsOf: ["-hwaccel", "videotoolbox"])
+        }
         args.append(contentsOf: ["-i", fileURL.path])
         args.append(contentsOf: ["-f", "null", "-"])
 
@@ -487,7 +524,12 @@ class VerificationService {
                 )
             }
         } catch VerificationError.cancelled {
-            throw VerificationError.cancelled
+            return DecodeResult(
+                success: false,
+                framesDecoded: nil,
+                speed: nil,
+                errorMessage: "Verification cancelled"
+            )
         } catch {
             return DecodeResult(
                 success: false,

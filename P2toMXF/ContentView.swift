@@ -38,7 +38,8 @@ struct ContentView: View {
                             allowsMultipleSelection: false
                         ) { result in
                             if case .success(let urls) = result, let url = urls.first {
-                                _ = url.startAccessingSecurityScopedResource()
+                                // Use viewModel's tracked access (released when card is removed)
+                                _ = viewModel.startSecurityAccess(for: url)
                                 viewModel.loadP2Card(from: url)
                             }
                         }
@@ -79,7 +80,12 @@ struct ContentView: View {
                     allowsMultipleSelection: false
                 ) { result in
                     if case .success(let urls) = result, let url = urls.first {
-                        _ = url.startAccessingSecurityScopedResource()
+                        // Release previous output directory access if any
+                        if let oldDir = viewModel.settings.outputDirectory {
+                            viewModel.stopSecurityAccess(for: oldDir)
+                        }
+                        // Track new access (released when changed or app terminates)
+                        _ = viewModel.startSecurityAccess(for: url)
                         viewModel.settings.outputDirectory = url
                     }
                 }

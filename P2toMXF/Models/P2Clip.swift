@@ -369,14 +369,19 @@ struct Timecode: Equatable {
     }
 
     /// Convert to absolute frame number for arithmetic operations
+    /// Note: Uses rounded frame rate to handle NTSC (29.97 → 30, 23.976 → 24)
     var totalFrames: Int {
-        let fps = Int(frameRate)
+        let fps = Int(frameRate.rounded())
         return hours * 3600 * fps + minutes * 60 * fps + seconds * fps + frames
     }
 
     /// Create timecode from total frames
+    /// Note: Uses rounded frame rate to handle NTSC (29.97 → 30, 23.976 → 24)
     static func from(frames: Int, frameRate: Double) -> Timecode {
-        let fps = Int(frameRate)
+        let fps = Int(frameRate.rounded())
+        guard fps > 0 else {
+            return Timecode(hours: 0, minutes: 0, seconds: 0, frames: 0, frameRate: frameRate)
+        }
         var remaining = frames
 
         let h = remaining / (3600 * fps)
@@ -855,6 +860,22 @@ struct ConversionJob: Identifiable, Codable {
     var verificationResult: VerificationResult?
     var verificationProgress: Double = 0.0  // 0.0 to 1.0
 
+    // Actual output files created (may differ from expected due to conflict resolution)
+    // Stored as path strings for Codable conformance
+    private var actualOutputPathStrings: [String] = []
+
+    /// URLs of actual output files created during conversion
+    /// Use this for verification instead of re-deriving from clip names
+    var actualOutputURLs: [URL] {
+        get { actualOutputPathStrings.map { URL(fileURLWithPath: $0) } }
+        set { actualOutputPathStrings = newValue.map { $0.path } }
+    }
+
+    /// Records an output file that was actually created during conversion
+    mutating func recordOutputURL(_ url: URL) {
+        actualOutputPathStrings.append(url.path)
+    }
+
     // URL accessors
     var cardPath: URL {
         get { URL(fileURLWithPath: cardPathString) }
@@ -1007,7 +1028,18 @@ struct ConversionJob: Identifiable, Codable {
             includingResourceValuesForKeys: nil,
             relativeTo: nil
         )
-        let outputBookmark = try? destinationURL.deletingLastPathComponent().bookmarkData(
+
+        // Determine the correct directory for the output bookmark
+        // - In individual mode, destinationURL IS the output directory
+        // - In concatenate mode, destinationURL is the output file, so get its parent
+        let outputDirectoryURL: URL
+        if settings.processingMode == .individual {
+            outputDirectoryURL = destinationURL
+        } else {
+            outputDirectoryURL = destinationURL.deletingLastPathComponent()
+        }
+
+        let outputBookmark = try? outputDirectoryURL.bookmarkData(
             options: .withSecurityScope,
             includingResourceValuesForKeys: nil,
             relativeTo: nil
@@ -1030,5 +1062,6 @@ struct ConversionJob: Identifiable, Codable {
         case destinationPathString, createdAt, status, progress, startedAt
         case cardBookmarkData, outputBookmarkData
         case verificationStatus, verificationResult, verificationProgress
+        case actualOutputPathStrings
     }
 }

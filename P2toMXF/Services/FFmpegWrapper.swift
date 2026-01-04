@@ -559,27 +559,36 @@ class FFmpegWrapper {
     /// thread-safety using `NSLock`:
     /// - `append(_:)` and `output` are synchronized via the internal lock
     /// - Safe to call from any thread or dispatch queue
-    /// - All mutable state (`_output`, `lastProgressUpdate`) is protected by the lock
+    /// - All mutable state (`_outputParts`, `lastProgressUpdate`) is protected by the lock
+    ///
+    /// # Memory Efficiency
+    /// Uses an array of string parts instead of repeated string concatenation.
+    /// This avoids O(n²) memory allocation behavior during long conversions.
     ///
     /// **Warning:** Do not add properties without updating lock usage.
     private final class OutputCollector: @unchecked Sendable {
         private let lock = NSLock()
-        private var _output = ""
+        private var _outputParts: [String] = []
         private var _lastProgressUpdate = Date.distantPast
 
         /// Minimum interval between progress updates (10 updates/second = 0.1s)
         private let progressThrottleInterval: TimeInterval = 0.1
 
+        init() {
+            // Pre-allocate capacity to reduce reallocations
+            _outputParts.reserveCapacity(1000)
+        }
+
         func append(_ string: String) {
             lock.lock()
-            _output += string
+            _outputParts.append(string)
             lock.unlock()
         }
 
         var output: String {
             lock.lock()
             defer { lock.unlock() }
-            return _output
+            return _outputParts.joined()
         }
 
         /// Returns true if enough time has passed since last progress update
@@ -739,21 +748,14 @@ class FFmpegWrapper {
     // MARK: - Cancellation
 
     /// Cancels any running conversion (both FFmpeg and BMX processes)
-    /// Uses process group killing to ensure child processes are also terminated
+    /// Uses Process.terminate() for safe, targeted process termination
     func cancelConversion() {
         isCancelling = true
 
         if let process = currentProcess, process.isRunning {
-            let pid = process.processIdentifier
-
-            // Kill the entire process group to catch any child processes
-            // getpgid returns the process group ID; kill with negative PID targets the group
-            let pgid = getpgid(pid)
-            if pgid > 0 {
-                kill(-pgid, SIGTERM)  // Negative PID = kill process group
-            }
-
-            // Also terminate via Swift API as backup
+            // Use terminate() which safely sends SIGTERM to just this process
+            // Note: We avoid kill(-pgid, SIGTERM) because FFmpeg inherits our process group,
+            // and killing the group would terminate the app itself!
             process.terminate()
         }
 
@@ -777,6 +779,9 @@ class FFmpegWrapper {
     func extractFrame(from videoURL: URL, atSeconds timestamp: Double, maxWidth: Int = 320) async -> NSImage? {
         guard let ffmpeg = ffmpegPath else { return nil }
 
+        // Check for cancellation before starting (fast path)
+        guard !Task.isCancelled else { return nil }
+
         // Use -ss before -i for fast seeking
         // Output JPEG to stdout via pipe
         let args = [
@@ -790,7 +795,25 @@ class FFmpegWrapper {
             "-"                               // Output to stdout
         ]
 
+        // Thread-safe wrapper to ensure continuation is resumed exactly once
+        final class ContinuationGuard: @unchecked Sendable {
+            private let lock = NSLock()
+            private var continuation: CheckedContinuation<NSImage?, Never>?
+
+            init(_ continuation: CheckedContinuation<NSImage?, Never>) {
+                self.continuation = continuation
+            }
+
+            func resume(returning value: NSImage?) {
+                lock.lock()
+                defer { lock.unlock() }
+                continuation?.resume(returning: value)
+                continuation = nil
+            }
+        }
+
         return await withCheckedContinuation { continuation in
+            let guard_ = ContinuationGuard(continuation)
             let process = Process()
             process.executableURL = ffmpeg
             process.arguments = args
@@ -803,16 +826,29 @@ class FFmpegWrapper {
             process.terminationHandler = { _ in
                 let imageData = outputPipe.fileHandleForReading.readDataToEndOfFile()
                 if !imageData.isEmpty, let image = NSImage(data: imageData) {
-                    continuation.resume(returning: image)
+                    guard_.resume(returning: image)
                 } else {
-                    continuation.resume(returning: nil)
+                    guard_.resume(returning: nil)
                 }
             }
 
             do {
                 try process.run()
+
+                // Monitor for task cancellation while FFmpeg runs
+                // Terminates orphaned FFmpeg processes when thumbnails scroll off-screen
+                Task.detached { [weak process] in
+                    while let p = process, p.isRunning {
+                        if Task.isCancelled {
+                            p.terminate()
+                            guard_.resume(returning: nil)
+                            return
+                        }
+                        try? await Task.sleep(nanoseconds: 50_000_000) // 50ms check interval
+                    }
+                }
             } catch {
-                continuation.resume(returning: nil)
+                guard_.resume(returning: nil)
             }
         }
     }

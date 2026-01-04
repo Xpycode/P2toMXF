@@ -8,6 +8,40 @@ class ConversionViewModel: ObservableObject {
     private let ffmpeg = FFmpegWrapper()
     let thumbnailManager: ThumbnailManager
 
+    // MARK: - Security-Scoped Access Tracking
+    /// URLs for which security-scoped access has been started
+    /// Must be balanced with stopAccessingSecurityScopedResource() when done
+    private var accessedURLs: Set<URL> = []
+
+    /// Start security-scoped access for a URL and track it
+    /// - Parameter url: The security-scoped URL to access
+    /// - Returns: True if access was granted
+    func startSecurityAccess(for url: URL) -> Bool {
+        if url.startAccessingSecurityScopedResource() {
+            accessedURLs.insert(url)
+            return true
+        }
+        return false
+    }
+
+    /// Stop security-scoped access for a specific URL
+    /// - Parameter url: The URL to release access for
+    func stopSecurityAccess(for url: URL) {
+        if accessedURLs.contains(url) {
+            url.stopAccessingSecurityScopedResource()
+            accessedURLs.remove(url)
+        }
+    }
+
+    /// Release all tracked security-scoped access
+    /// Call when cleaning up resources (e.g., app termination)
+    func releaseAllSecurityAccess() {
+        for url in accessedURLs {
+            url.stopAccessingSecurityScopedResource()
+        }
+        accessedURLs.removeAll()
+    }
+
     // State - Multiple cards support
     @Published var loadedCards: [P2Card] = []
     @Published var activeCardId: UUID?
@@ -362,18 +396,26 @@ class ConversionViewModel: ObservableObject {
         isLoading = true
         errorMessage = nil
 
-        Task {
+        // Use Task.detached to run parsing off the main thread
+        // This prevents UI freezing on large P2 cards (5-30+ seconds of I/O)
+        let parser = self.parser
+        Task.detached {
             do {
                 let card = try parser.parseP2Card(at: url)
-                self.loadedCards.append(card)
-                self.activeCardId = card.id
-                // Auto-select all clips in the new card
-                self.selectedClips = Set(card.clips.map { $0.id })
-                self.conversionStatus = [:]
+                await MainActor.run {
+                    self.loadedCards.append(card)
+                    self.activeCardId = card.id
+                    // Auto-select all clips in the new card
+                    self.selectedClips = Set(card.clips.map { $0.id })
+                    self.conversionStatus = [:]
+                    self.isLoading = false
+                }
             } catch {
-                self.errorMessage = error.localizedDescription
+                await MainActor.run {
+                    self.errorMessage = error.localizedDescription
+                    self.isLoading = false
+                }
             }
-            self.isLoading = false
         }
     }
 
@@ -387,6 +429,9 @@ class ConversionViewModel: ObservableObject {
 
     /// Remove a card from the loaded cards list
     func removeCard(_ card: P2Card) {
+        // Release security-scoped access for this card's path
+        stopSecurityAccess(for: card.rootPath)
+
         loadedCards.removeAll { $0.id == card.id }
 
         // If we removed the active card, switch to another
@@ -410,24 +455,32 @@ class ConversionViewModel: ObservableObject {
     func refreshActiveCard() {
         guard let card = activeCard else { return }
         let rootPath = card.rootPath
+        let cardId = card.id
 
         isLoading = true
         errorMessage = nil
 
-        Task {
+        // Use Task.detached to run parsing off the main thread
+        let parser = self.parser
+        Task.detached {
             do {
                 let refreshedCard = try parser.parseP2Card(at: rootPath)
-                // Replace the old card with refreshed data
-                if let index = loadedCards.firstIndex(where: { $0.id == card.id }) {
-                    loadedCards[index] = refreshedCard
+                await MainActor.run {
+                    // Replace the old card with refreshed data
+                    if let index = self.loadedCards.firstIndex(where: { $0.id == cardId }) {
+                        self.loadedCards[index] = refreshedCard
+                    }
+                    self.activeCardId = refreshedCard.id
+                    self.selectedClips = Set(refreshedCard.clips.map { $0.id })
+                    self.conversionStatus = [:]
+                    self.isLoading = false
                 }
-                activeCardId = refreshedCard.id
-                selectedClips = Set(refreshedCard.clips.map { $0.id })
-                conversionStatus = [:]
             } catch {
-                self.errorMessage = "Refresh failed: \(error.localizedDescription)"
+                await MainActor.run {
+                    self.errorMessage = "Refresh failed: \(error.localizedDescription)"
+                    self.isLoading = false
+                }
             }
-            self.isLoading = false
         }
     }
 

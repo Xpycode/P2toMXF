@@ -12,7 +12,18 @@ class QueueManager: ObservableObject {
     // MARK: - Published State
     @Published private(set) var jobs: [ConversionJob] = []
     @Published private(set) var isProcessing = false
-    @Published var consoleLog: String = ""
+
+    /// Console log lines - stored as array to enable efficient trimming
+    /// Use `consoleLog` for display (joins lines)
+    private var consoleLines: [String] = []
+
+    /// Maximum number of console lines to retain (prevents unbounded memory growth)
+    private let maxConsoleLines = 5000
+
+    /// Console log as single string for display
+    var consoleLog: String {
+        consoleLines.joined(separator: "\n")
+    }
 
     // MARK: - Private
     private let ffmpeg = FFmpegWrapper()
@@ -32,7 +43,9 @@ class QueueManager: ObservableObject {
     private static let queueFileName = "queue.json"
 
     private var queueFileURL: URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            fatalError("Application Support directory unavailable - this should never happen on macOS")
+        }
         let appFolder = appSupport.appendingPathComponent("P2toMXF", isDirectory: true)
 
         // Ensure directory exists
@@ -101,11 +114,22 @@ class QueueManager: ObservableObject {
 
     func log(_ message: String) {
         let timestamp = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
-        consoleLog += "[\(timestamp)] \(message)\n"
+        let line = "[\(timestamp)] \(message)"
+        consoleLines.append(line)
+
+        // Trim old lines if over limit (keep last maxConsoleLines)
+        if consoleLines.count > maxConsoleLines {
+            let excess = consoleLines.count - maxConsoleLines
+            consoleLines.removeFirst(excess)
+        }
+
+        // Trigger UI update
+        objectWillChange.send()
     }
 
     func clearConsole() {
-        consoleLog = ""
+        consoleLines.removeAll()
+        objectWillChange.send()
     }
 
     // MARK: - Persistence
@@ -255,21 +279,35 @@ class QueueManager: ObservableObject {
 
     // MARK: - Filename Conflict Resolution
 
+    /// Checks if a filename conflicts with any existing or queued outputs
+    private func isFilenameConflicting(_ url: URL) -> Bool {
+        let path = url.path
+
+        // Check all job destinations (any state)
+        for job in jobs {
+            if job.destinationURL.path == path {
+                return true
+            }
+            // Also check actual output files (may have been renamed during conversion)
+            if job.actualOutputURLs.contains(where: { $0.path == path }) {
+                return true
+            }
+        }
+
+        // Check filesystem
+        return FileManager.default.fileExists(atPath: path)
+    }
+
     /// Resolves filename conflicts by appending a counter
     private func resolveFilenameConflict(for url: URL) -> URL {
         let directory = url.deletingLastPathComponent()
         let filename = url.deletingPathExtension().lastPathComponent
         let ext = url.pathExtension
 
-        // Check against pending jobs
-        let pendingDestinations = jobs
-            .filter { $0.status == .pending }
-            .map { $0.destinationURL.path }
-
         var finalURL = url
         var counter = 1
 
-        while pendingDestinations.contains(finalURL.path) || FileManager.default.fileExists(atPath: finalURL.path) {
+        while isFilenameConflicting(finalURL) {
             let newFilename = "\(filename) (\(counter)).\(ext)"
             finalURL = directory.appendingPathComponent(newFilename)
             counter += 1
@@ -610,6 +648,10 @@ class QueueManager: ObservableObject {
                 outputFiles = try await processIndividualJob(job, index: index)
             }
 
+            // Store actual output URLs for verification
+            // (may differ from expected due to conflict resolution)
+            jobs[index].actualOutputURLs = outputFiles
+
             jobs[index].status = .completed
             jobs[index].progress = 1.0
 
@@ -882,25 +924,36 @@ class QueueManager: ObservableObject {
 
     /// Verifies individual output files from an individual-mode job
     private func verifyIndividualJobOutputs(job: ConversionJob, index: Int, mode: VerificationMode) async throws {
-        let outputDir = job.destinationURL
-        let ext = job.settings.outputContainer.fileExtension
-
         var allPassed = true
         var failedClips: [String] = []
 
-        for (clipIndex, clip) in job.clips.enumerated() {
-            let clipOutputURL = outputDir.appendingPathComponent("\(clip.displayName).\(ext)")
+        // Use actualOutputURLs if available (recorded during conversion)
+        // This handles filename conflict resolution correctly
+        let outputURLs: [URL]
+        if !job.actualOutputURLs.isEmpty {
+            outputURLs = job.actualOutputURLs
+        } else {
+            // Fallback for legacy jobs: reconstruct from clip names
+            let outputDir = job.destinationURL
+            let ext = job.settings.outputContainer.fileExtension
+            outputURLs = job.clips.map { outputDir.appendingPathComponent("\($0.displayName).\(ext)") }
+        }
 
-            log("Verifying [\(clipIndex + 1)/\(job.clips.count)]: \(clip.displayName)")
+        for (clipIndex, clipOutputURL) in outputURLs.enumerated() {
+            let clipName = clipOutputURL.deletingPathExtension().lastPathComponent
+            log("Verifying [\(clipIndex + 1)/\(outputURLs.count)]: \(clipName)")
+
+            // Get expected frames from corresponding clip if indices align
+            let expectedFrames: Int? = clipIndex < job.clips.count ? job.clips[clipIndex].durationFrames : nil
 
             let result = try await verificationService.verify(
                 fileURL: clipOutputURL,
                 mode: mode,
-                expectedFrames: clip.durationFrames,
+                expectedFrames: expectedFrames ?? 0,
                 progress: { [weak self] progress, message in
                     Task { @MainActor in
-                        let baseProgress = Double(clipIndex) / Double(job.clips.count)
-                        let clipContribution = progress / Double(job.clips.count)
+                        let baseProgress = Double(clipIndex) / Double(outputURLs.count)
+                        let clipContribution = progress / Double(outputURLs.count)
                         self?.jobs[index].verificationProgress = baseProgress + clipContribution
                     }
                 },
@@ -913,14 +966,14 @@ class QueueManager: ObservableObject {
 
             if !result.passed {
                 allPassed = false
-                failedClips.append(clip.displayName)
+                failedClips.append(clipName)
             }
         }
 
         if allPassed {
             jobs[index].verificationStatus = .verified
             jobs[index].verificationResult = VerificationResult(
-                fileURL: outputDir,
+                fileURL: job.destinationURL,
                 passed: true,
                 mode: mode,
                 duration: 0,

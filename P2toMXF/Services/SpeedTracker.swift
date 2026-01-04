@@ -24,7 +24,9 @@ class SpeedTracker: ObservableObject {
     // MARK: - Persistence
 
     private var recordsFileURL: URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            fatalError("Application Support directory unavailable - this should never happen on macOS")
+        }
         let appFolder = appSupport.appendingPathComponent("P2toMXF", isDirectory: true)
         try? FileManager.default.createDirectory(at: appFolder, withIntermediateDirectories: true)
         return appFolder.appendingPathComponent(Self.recordsFileName)
@@ -224,25 +226,37 @@ class SpeedTracker: ObservableObject {
         return records.map(\.speedMultiplier).reduce(0, +) / Double(records.count)
     }
 
-    /// Attempts to determine why speed is slow
+    /// Attempts to determine why speed is slow using proper volume APIs
     private func detectSlowSpeedReason(outputPath: URL) -> SlowSpeedReason {
-        let path = outputPath.path
+        // Use URL resource values for reliable volume detection
+        do {
+            let resourceValues = try outputPath.resourceValues(forKeys: [
+                .volumeIsLocalKey,
+                .volumeIsRemovableKey,
+                .volumeIsInternalKey
+            ])
 
-        // Check for network paths
-        if path.hasPrefix("/Volumes/") {
-            // Check if it's a network mount
-            let volumeName = outputPath.pathComponents.dropFirst(2).first ?? ""
-            if isNetworkVolume(named: volumeName) {
+            // Network storage: volume is not local
+            if resourceValues.volumeIsLocal == false {
                 return .networkStorage
             }
 
-            // Likely external drive
-            return .externalDrive
-        }
+            // External drive: removable or not internal
+            if resourceValues.volumeIsRemovable == true ||
+               resourceValues.volumeIsInternal == false {
+                return .externalDrive
+            }
+        } catch {
+            // Fall back to path-based heuristics if resource values unavailable
+            let path = outputPath.path
 
-        // Check for typical external/slow disk patterns
-        if path.contains("/media/") || path.contains("/mnt/") {
-            return .externalDrive
+            if path.hasPrefix("/Volumes/") {
+                let volumeName = outputPath.pathComponents.dropFirst(2).first ?? ""
+                if isNetworkVolume(named: volumeName) {
+                    return .networkStorage
+                }
+                return .externalDrive
+            }
         }
 
         return .unknown
