@@ -759,3 +759,77 @@ Compact estimate display for pending jobs in queue list
 - `Models/P2Clip.swift` - Added estimation models, `totalFileSize` computed property
 - `Services/QueueManager.swift` - Integration with SpeedTracker, estimate methods
 - `Views/QueueListView.swift` - Estimate badges, slow speed banner, header estimates
+
+---
+
+## Session Log: 2026-01-04 (UI Polish & Bug Fixes)
+
+### Overview
+Multiple UI improvements and bug fixes for the queue panel, verification system, and clip list display.
+
+### Commits
+- `ca64750` - Improve queue panel layout and sizing
+- `36bba88` - Improve job display name and footer layout
+- `cb1507c` - Fix thumbnail jitter during progress updates
+- `6b3d31e` - Fix verification failing on directory instead of file
+- `eda3b1a` - Center queue empty state both horizontally and vertically
+
+### Issues Fixed
+
+#### 1. Queue Panel Too Narrow and Short
+**Problem**: Queue panel only used 1/4 of available vertical space due to `maxHeight: 200` constraint.
+**Fix**: 
+- Removed `maxHeight: 200` from job list in QueueListView
+- Expanded queue panel width from 220-350px to 280-450px
+- Increased minimum window width to 1280px
+
+#### 2. Job Names Truncated Awkwardly
+**Problem**: Job names showed awkward line breaks like "Silvesterkonz-ert 2025..."
+**Fix**:
+- Changed `lineLimit(1)` to `lineLimit(2)` for job names
+- Added `truncationMode(.middle)` to preserve start and end of names
+- Removed redundant cardName from job row (already in displayName)
+
+#### 3. Job Display Name Missing Extension
+**Problem**: Jobs showed "Silvesterkonzert 2025 P2 K7 2v4" without the .mxf extension
+**Fix**: Changed `displayName` from `destinationURL.deletingPathExtension().lastPathComponent` to just `destinationURL.lastPathComponent`
+
+#### 4. Output Directory Display Too Narrow
+**Problem**: Output folder name truncated to 150px fixed width
+**Fix**: Changed to `minWidth: 120, maxWidth: 280` for dynamic sizing
+
+#### 5. Thumbnail Jitter During Progress Updates
+**Problem**: Thumbnails visually jittered when progress bar updated during conversion
+**Root Cause**: SwiftUI re-rendered entire ClipRowView body when `status` property changed
+**Fix**: Extracted into separate isolated views:
+- `ClipThumbnailsView` - Only depends on clip and thumbnailManager (stable)
+- `ClipStatusBadge` - Handles frequently-updating status (isolated)
+
+#### 6. Verification Failing on Directory
+**Problem**: Verification showed "Invalid container: Is a directory" error
+**Root Cause**: Legacy jobs had `destinationURL` pointing to output directory instead of file
+**Fix**: Added directory detection in QueueManager.performVerification():
+```swift
+if FileManager.default.fileExists(atPath: fileURL.path, isDirectory: &isDirectory), isDirectory.boolValue {
+    let ext = job.settings.outputContainer.fileExtension
+    let baseName = job.destinationURL.lastPathComponent
+    let fileName = "\(baseName).\(ext)"
+    fileURL = fileURL.appendingPathComponent(fileName)
+}
+```
+
+#### 7. Queue Empty State Not Centered
+**Problem**: Empty queue state was top-left aligned instead of centered
+**Fix**: Added `maxHeight: .infinity` to empty state frame for proper centering
+
+### Files Modified
+- `P2toMXF/ContentView.swift` - Window width, queue panel frame
+- `P2toMXF/Models/P2Clip.swift` - displayName includes extension
+- `P2toMXF/Views/QueueListView.swift` - Removed height constraint, centered empty state
+- `P2toMXF/Views/JobRowView.swift` - Better text layout, line limits
+- `P2toMXF/Views/ClipRowView.swift` - Extracted thumbnail/status into isolated views
+- `P2toMXF/Views/FooterControlsView.swift` - Wider output directory display
+- `P2toMXF/Services/QueueManager.swift` - Directory detection for verification
+
+### SwiftUI Performance Insight
+When a view property changes frequently (like progress), extract static content into separate child views. SwiftUI only re-renders views whose inputs change - isolated views with stable inputs won't redraw even when sibling views update.
