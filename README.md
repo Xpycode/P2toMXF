@@ -77,7 +77,7 @@ Build with Xcode 16+ (Cmd+B). All dependencies (FFmpeg, BMX) are bundled.
 2. **Select Clips** — Check the clips you want to convert
 3. **Choose Settings** — Pick output format (MXF/MOV) and mode (Merge/Individual)
 4. **Set Output** — Choose destination folder and filename
-5. **Convert** — Click "Convert Now" or add to queue for batch processing
+5. **Convert** — Click "Merge" to process immediately, or "Add to Queue" for batch processing
 
 ### Keyboard Shortcuts
 
