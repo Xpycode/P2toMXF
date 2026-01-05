@@ -246,6 +246,7 @@ codesign --force --sign - bmxtranswrap mxf2raw lib/*.dylib
    - Option C: Git LFS for large file storage
 7. ~~**Multi-job queueing**: Queue multiple conversion tasks and execute sequentially~~ ✓ Done
 8. ~~**Output verification**: Verify converted files decode correctly~~ ✓ Done
+9. ~~**Multi-card loading**: Load multiple P2 cards from a parent folder at once~~ ✓ Done
 
 ---
 
@@ -901,3 +902,48 @@ Security-scoped bookmarks for file access require careful handling:
 - But `destinationPathString` should store the full FILE path (with filename)
 
 The bug occurred because both `resolveCardBookmark()` and `resolveOutputBookmark()` were updating their respective path strings, but only the card path should be updated (since it IS a directory). The destination path must preserve the filename.
+
+---
+
+## Session Log: 2026-01-05 (Multi-Card Loading)
+
+### Overview
+Added ability to load multiple P2 cards from a parent folder at once, plus Cmd+O keyboard shortcut.
+
+### Features Added
+
+#### 1. Multi-Card Discovery
+- Select a parent folder containing multiple P2 cards
+- App automatically discovers all P2 cards in immediate subdirectories
+- Cards are loaded in parallel for speed
+- Works with single P2 card selection too (backwards compatible)
+
+#### 2. Keyboard Shortcut
+- **Cmd+O** opens the P2 card picker from anywhere in the app
+- Added via SwiftUI `.commands` modifier with NotificationCenter bridge
+
+### Key Code
+
+#### P2CardParser.discoverP2Cards(in:)
+```swift
+func discoverP2Cards(in url: URL) -> [URL] {
+    // First check if URL itself is a P2 card
+    if validateP2Structure(at: url) { return [url] }
+    
+    // Otherwise scan subdirectories
+    let contents = try fm.contentsOfDirectory(at: url, ...)
+    return contents.filter { validateP2Structure(at: $0) }
+                   .sorted { $0.lastPathComponent < $1.lastPathComponent }
+}
+```
+
+#### ConversionViewModel.loadP2Cards(from:)
+- Uses `withTaskGroup` for parallel parsing
+- Collects results then updates UI on MainActor
+- Swift 6 compliant (no captured var mutations in concurrent code)
+
+### Files Modified
+- `P2toMXF/Services/P2CardParser.swift` - Added `discoverP2Cards(in:)`
+- `P2toMXF/ConversionViewModel.swift` - Added `loadP2Cards(from:)`
+- `P2toMXF/ContentView.swift` - Updated fileImporter, added notification listener
+- `P2toMXF/P2toMXFApp.swift` - Added File menu with Cmd+O shortcut
