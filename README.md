@@ -64,7 +64,7 @@ Download the latest `.dmg` from [Releases](../../releases) and drag to Applicati
 
 ### Build from Source
 ```bash
-git clone https://github.com/yourusername/P2toMXF.git
+git clone https://github.com/Xpycode/P2toMXF.git
 cd P2toMXF
 open P2toMXF.xcodeproj
 ```
