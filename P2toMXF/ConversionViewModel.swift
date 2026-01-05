@@ -3,7 +3,16 @@ import SwiftUI
 
 @MainActor
 class ConversionViewModel: ObservableObject {
-    // Services
+    // MARK: - Static Formatters
+    /// Cached DateFormatter for log timestamps (creating formatters is expensive)
+    private static let timestampFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .medium
+        return formatter
+    }()
+
+    // MARK: - Services
     private let parser = P2CardParser()
     private let ffmpeg = FFmpegWrapper()
     let thumbnailManager: ThumbnailManager
@@ -68,7 +77,18 @@ class ConversionViewModel: ObservableObject {
     @Published var isCancelled = false
     @Published var errorMessage: String?
     @Published var ffmpegVersion: String?
-    @Published var consoleLog: String = ""
+
+    // MARK: - Console Log (Array-Based for Efficiency)
+    /// Console log lines - stored as array for efficient trimming
+    private var consoleLines: [String] = []
+
+    /// Maximum number of console lines to retain (prevents unbounded memory growth)
+    private let maxConsoleLines = 5000
+
+    /// Console log as single string for display
+    var consoleLog: String {
+        consoleLines.joined(separator: "\n")
+    }
 
     /// Feedback message after adding to queue
     @Published var queueFeedback: String?
@@ -84,12 +104,19 @@ class ConversionViewModel: ObservableObject {
     }
 
     func log(_ message: String) {
-        let timestamp = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
-        consoleLog += "[\(timestamp)] \(message)\n"
+        let timestamp = Self.timestampFormatter.string(from: Date())
+        let line = "[\(timestamp)] \(message)"
+        consoleLines.append(line)
+
+        // Trim old lines if over limit (keep last maxConsoleLines)
+        if consoleLines.count > maxConsoleLines {
+            let excess = consoleLines.count - maxConsoleLines
+            consoleLines.removeFirst(excess)
+        }
     }
 
     func clearConsole() {
-        consoleLog = ""
+        consoleLines.removeAll()
     }
 
     // MARK: - Progress Timer

@@ -25,6 +25,13 @@ struct QueueListView: View {
                     .padding(.vertical, 4)
                 }
 
+                // Persistence error warning
+                if let persistenceError = queueManager.persistenceError {
+                    PersistenceWarningBanner(message: persistenceError)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                }
+
                 if queueManager.jobs.isEmpty {
                     emptyState
                 } else {
@@ -248,6 +255,32 @@ struct QueueListView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+}
+
+// MARK: - Persistence Warning Banner
+
+/// Warning banner displayed when queue persistence fails
+struct PersistenceWarningBanner: View {
+    let message: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundColor(.orange)
+                .font(.caption)
+
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+
+            Spacer()
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Color.orange.opacity(0.1))
+        .cornerRadius(6)
     }
 }
 

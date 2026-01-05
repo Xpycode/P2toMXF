@@ -6,6 +6,15 @@ import IOKit.pwr_mgt
 /// Manages a queue of conversion jobs, executing them sequentially
 @MainActor
 class QueueManager: ObservableObject {
+    // MARK: - Static Formatters
+    /// Cached DateFormatter for log timestamps (creating formatters is expensive)
+    private static let timestampFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .medium
+        return formatter
+    }()
+
     // MARK: - Shared Instance
     @MainActor static let shared = QueueManager()
 
@@ -38,6 +47,9 @@ class QueueManager: ObservableObject {
     @Published private(set) var isVerifying = false
     @Published private(set) var slowSpeedWarning: SlowSpeedWarning?
     @Published private(set) var currentJobEstimate: ConversionEstimate?
+    /// Error message when queue persistence fails (nil if no error)
+    /// Displayed in UI to warn users their queue may not survive app restarts
+    @Published private(set) var persistenceError: String?
 
     // MARK: - Persistence
     private static let queueFileName = "queue.json"
@@ -123,7 +135,7 @@ class QueueManager: ObservableObject {
     // MARK: - Logging
 
     func log(_ message: String) {
-        let timestamp = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
+        let timestamp = Self.timestampFormatter.string(from: Date())
         let line = "[\(timestamp)] \(message)"
         consoleLines.append(line)
 
@@ -153,7 +165,7 @@ class QueueManager: ObservableObject {
         // Capture current state for background task
         let jobsToSave = self.jobs
 
-        Task.detached(priority: .background) {
+        Task.detached(priority: .background) { [weak self] in
             do {
                 let encoder = JSONEncoder()
                 encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -161,8 +173,19 @@ class QueueManager: ObservableObject {
 
                 let data = try encoder.encode(jobsToSave)
                 try data.write(to: fileURL, options: .atomic)
+
+                // Clear any previous error on success
+                await MainActor.run {
+                    self?.persistenceError = nil
+                }
             } catch {
-                print("Failed to save queue: \(error)")
+                // Surface the error to UI (only first occurrence to avoid spam)
+                await MainActor.run {
+                    if self?.persistenceError == nil {
+                        self?.persistenceError = "Queue may not persist: \(error.localizedDescription)"
+                        self?.log("Warning: Failed to save queue - \(error.localizedDescription)")
+                    }
+                }
             }
         }
     }
