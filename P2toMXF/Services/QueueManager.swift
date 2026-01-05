@@ -42,16 +42,25 @@ class QueueManager: ObservableObject {
     // MARK: - Persistence
     private static let queueFileName = "queue.json"
 
-    private var queueFileURL: URL {
+    /// URL for the queue persistence file (nil if persistence unavailable)
+    /// Gracefully degrades to in-memory queue if Application Support is inaccessible
+    private var queueFileURL: URL?
+
+    /// Sets up the persistence file URL if possible
+    private func setupPersistence() {
         guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
-            fatalError("Application Support directory unavailable - this should never happen on macOS")
+            log("Warning: Application Support unavailable - queue will not persist")
+            return
         }
+
         let appFolder = appSupport.appendingPathComponent("P2toMXF", isDirectory: true)
 
-        // Ensure directory exists
-        try? FileManager.default.createDirectory(at: appFolder, withIntermediateDirectories: true)
-
-        return appFolder.appendingPathComponent(Self.queueFileName)
+        do {
+            try FileManager.default.createDirectory(at: appFolder, withIntermediateDirectories: true)
+            queueFileURL = appFolder.appendingPathComponent(Self.queueFileName)
+        } catch {
+            log("Warning: Cannot create app folder - queue will not persist: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Computed Properties
@@ -107,6 +116,7 @@ class QueueManager: ObservableObject {
     // MARK: - Init
 
     private init() {
+        setupPersistence()
         loadQueue()
     }
 
@@ -135,10 +145,13 @@ class QueueManager: ObservableObject {
     // MARK: - Persistence
 
     /// Saves the current queue to disk (async to avoid blocking main thread)
+    /// No-op if persistence is unavailable
     private func saveQueue() {
+        // Skip if persistence unavailable
+        guard let fileURL = self.queueFileURL else { return }
+
         // Capture current state for background task
         let jobsToSave = self.jobs
-        let fileURL = self.queueFileURL
 
         Task.detached(priority: .background) {
             do {
@@ -155,11 +168,13 @@ class QueueManager: ObservableObject {
     }
 
     /// Loads the queue from disk (only pending jobs)
+    /// No-op if persistence is unavailable
     private func loadQueue() {
-        guard FileManager.default.fileExists(atPath: queueFileURL.path) else { return }
+        guard let fileURL = queueFileURL,
+              FileManager.default.fileExists(atPath: fileURL.path) else { return }
 
         do {
-            let data = try Data(contentsOf: queueFileURL)
+            let data = try Data(contentsOf: fileURL)
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
 
@@ -245,19 +260,35 @@ class QueueManager: ObservableObject {
 
     // MARK: - Security-Scoped Resource Management
 
+    /// Result of attempting to start security-scoped access
+    private enum AccessResult {
+        case newlyGranted    // We started access - caller SHOULD stop it
+        case alreadyActive   // Someone else started it - caller should NOT stop
+        case denied          // Access failed
+
+        var wasGranted: Bool {
+            self != .denied
+        }
+    }
+
     /// Starts accessing a security-scoped resource if not already accessed
-    /// - Returns: true if access was granted (or already active), false if denied
-    private func startAccessingIfNeeded(_ url: URL) -> Bool {
+    /// - Returns: AccessResult indicating whether caller should stop access later
+    private func startAccessingIfNeeded(_ url: URL) -> AccessResult {
         // Normalize the URL to avoid duplicates with different representations
         let standardizedURL = url.standardizedFileURL
-        guard !accessedSecurityScopedResources.contains(standardizedURL) else {
-            return true  // Already accessing
+
+        // Check if already accessing (someone else started it)
+        if accessedSecurityScopedResources.contains(standardizedURL) {
+            return .alreadyActive
         }
+
+        // Try to start new access
         if standardizedURL.startAccessingSecurityScopedResource() {
             accessedSecurityScopedResources.insert(standardizedURL)
-            return true
+            return .newlyGranted
         }
-        return false
+
+        return .denied
     }
 
     /// Stops accessing a specific security-scoped resource
@@ -322,22 +353,32 @@ class QueueManager: ObservableObject {
     /// - Parameter job: The conversion job to add
     /// - Parameter autoStart: If true, immediately starts processing (for "Convert Now" button)
     func addJob(_ job: ConversionJob, autoStart: Bool = false) {
-        // Check for filename conflicts and resolve
         var finalJob = job
-        let resolvedURL = resolveFilenameConflict(for: job.destinationURL)
 
-        if resolvedURL != job.destinationURL {
-            // Create new job with resolved URL, preserving bookmark data
-            finalJob = ConversionJob(
-                cardName: job.cardName,
-                cardPath: job.cardPath,
-                clips: job.clips,
-                settings: job.settings,
-                destinationURL: resolvedURL,
-                cardBookmarkData: job.cardBookmarkData,
-                outputBookmarkData: job.outputBookmarkData
-            )
-            log("Renamed output to avoid conflict: \(resolvedURL.lastPathComponent)")
+        // Only resolve filename conflicts for FILES, not directories
+        // Individual mode uses directory as destination (each clip creates its own file)
+        var isDirectory: ObjCBool = false
+        let exists = FileManager.default.fileExists(atPath: job.destinationURL.path, isDirectory: &isDirectory)
+
+        // Skip conflict resolution if: doesn't exist yet, or exists but is a directory (individual mode)
+        let shouldResolveConflict = exists && !isDirectory.boolValue
+
+        if shouldResolveConflict {
+            let resolvedURL = resolveFilenameConflict(for: job.destinationURL)
+
+            if resolvedURL != job.destinationURL {
+                // Create new job with resolved URL, preserving bookmark data
+                finalJob = ConversionJob(
+                    cardName: job.cardName,
+                    cardPath: job.cardPath,
+                    clips: job.clips,
+                    settings: job.settings,
+                    destinationURL: resolvedURL,
+                    cardBookmarkData: job.cardBookmarkData,
+                    outputBookmarkData: job.outputBookmarkData
+                )
+                log("Renamed output to avoid conflict: \(resolvedURL.lastPathComponent)")
+            }
         }
 
         jobs.append(finalJob)
@@ -621,13 +662,32 @@ class QueueManager: ObservableObject {
         }
 
         // Start security-scoped access using balanced tracking to prevent nested start/stop issues
-        let cardAccessGranted = startAccessingIfNeeded(cardURL)
-        let outputAccessGranted = startAccessingIfNeeded(outputDirURL)
+        let cardAccess = startAccessingIfNeeded(cardURL)
+        let outputAccess = startAccessingIfNeeded(outputDirURL)
+
+        // Fail fast with clear error if access denied
+        if cardAccess == .denied {
+            jobs[index].status = .failed("Cannot access source folder - permission denied or bookmark expired")
+            log("FAILED: Cannot access source folder for \(job.displayName)")
+            currentJobId = nil
+            currentJobEstimate = nil
+            return
+        }
+
+        if outputAccess == .denied {
+            jobs[index].status = .failed("Cannot access output folder - permission denied or bookmark expired")
+            log("FAILED: Cannot access output folder for \(job.displayName)")
+            currentJobId = nil
+            currentJobEstimate = nil
+            return
+        }
+
+        // Only stop access we actually started (not access that was already active)
         defer {
-            if cardAccessGranted {
+            if cardAccess == .newlyGranted {
                 stopAccessingIfNeeded(cardURL)
             }
-            if outputAccessGranted {
+            if outputAccess == .newlyGranted {
                 stopAccessingIfNeeded(outputDirURL)
             }
         }

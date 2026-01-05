@@ -13,6 +13,11 @@ class ConversionViewModel: ObservableObject {
     /// Must be balanced with stopAccessingSecurityScopedResource() when done
     private var accessedURLs: Set<URL> = []
 
+    /// Parent folder URLs used to discover multiple cards
+    /// Maps parent URL to the set of card IDs loaded from it
+    /// Used to release parent access when all cards from it are removed
+    private var parentFolderToCards: [URL: Set<UUID>] = [:]
+
     /// Start security-scoped access for a URL and track it
     /// - Parameter url: The security-scoped URL to access
     /// - Returns: True if access was granted
@@ -501,6 +506,13 @@ class ConversionViewModel: ObservableObject {
                     self.selectedClips = Set(firstCard.clips.map { $0.id })
                 }
 
+                // Track parent folder relationship for multi-card loads
+                // This allows us to release parent access when all cards from it are removed
+                if sortedCards.count > 1 {
+                    let cardIds = Set(sortedCards.map { $0.id })
+                    self.parentFolderToCards[url] = cardIds
+                }
+
                 self.conversionStatus = [:]
                 self.isLoading = false
 
@@ -528,6 +540,22 @@ class ConversionViewModel: ObservableObject {
     func removeCard(_ card: P2Card) {
         // Release security-scoped access for this card's path
         stopSecurityAccess(for: card.rootPath)
+
+        // Check if this card was loaded from a parent folder
+        // Release parent access when the last card from it is removed
+        for (parentURL, var cardIds) in parentFolderToCards {
+            if cardIds.contains(card.id) {
+                cardIds.remove(card.id)
+                if cardIds.isEmpty {
+                    // Last card from this parent - release parent access
+                    stopSecurityAccess(for: parentURL)
+                    parentFolderToCards.removeValue(forKey: parentURL)
+                } else {
+                    parentFolderToCards[parentURL] = cardIds
+                }
+                break
+            }
+        }
 
         loadedCards.removeAll { $0.id == card.id }
 

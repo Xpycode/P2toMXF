@@ -38,8 +38,21 @@ class BMXWrapper {
     // MARK: - Properties
 
     private var currentProcess: Process?
-    private var isCancelling = false  // Flag to distinguish cancellation from failure
     private let toolResolver = BundledToolResolver.shared
+
+    // MARK: - Thread Safety
+
+    /// Lock protecting the cancellation flag
+    /// Required because `cancel()` is called from main thread while
+    /// `terminationHandler` reads on a background queue
+    private let cancelLock = NSLock()
+    private var _isCancelling = false
+
+    /// Thread-safe cancellation flag
+    private var isCancelling: Bool {
+        get { cancelLock.withLock { _isCancelling } }
+        set { cancelLock.withLock { _isCancelling = newValue } }
+    }
 
     /// Path to the bundled bmxtranswrap binary
     var bmxTranswrapPath: URL? {
@@ -272,20 +285,14 @@ class BMXWrapper {
     // MARK: - Cancellation
 
     /// Cancels any running operation
-    /// Uses process group killing to ensure child processes are also terminated
+    /// Note: We only terminate the specific process, NOT the process group.
+    /// BMX subprocess inherits our process group, so kill(-pgid, SIGTERM)
+    /// would terminate the app itself!
     func cancel() {
         isCancelling = true
 
         if let process = currentProcess, process.isRunning {
-            let pid = process.processIdentifier
-
-            // Kill the entire process group to catch any child processes
-            let pgid = getpgid(pid)
-            if pgid > 0 {
-                kill(-pgid, SIGTERM)  // Negative PID = kill process group
-            }
-
-            // Also terminate via Swift API as backup
+            // SAFE: Only terminate the specific process
             process.terminate()
         }
 

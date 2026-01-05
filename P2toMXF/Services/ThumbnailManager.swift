@@ -34,7 +34,14 @@ actor ThumbnailManager {
     /// Semaphore to limit concurrent FFmpeg processes
     private let maxConcurrentExtractions = 3
     private var activeExtractions = 0
-    private var waitingContinuations: [CheckedContinuation<Void, Never>] = []
+
+    /// Identified continuation for cancellation support
+    /// Wraps the continuation with a UUID so we can find and remove it when cancelled
+    private struct WaitingContinuation {
+        let id: UUID
+        let continuation: CheckedContinuation<Void, Never>
+    }
+    private var waitingContinuations: [WaitingContinuation] = []
 
     // MARK: - Initialization
 
@@ -198,16 +205,43 @@ actor ThumbnailManager {
             return
         }
 
-        // Wait until a slot is available
-        await withCheckedContinuation { continuation in
-            waitingContinuations.append(continuation)
+        // Generate unique ID for this waiter (for cancellation tracking)
+        let waiterId = UUID()
+
+        // Wait until a slot is available, with cancellation support
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                waitingContinuations.append(WaitingContinuation(id: waiterId, continuation: continuation))
+            }
+        } onCancel: {
+            // Note: onCancel runs on ANY thread, NOT isolated to the actor
+            // Schedule cleanup on the actor to safely access state
+            Task { [waiterId] in
+                await self.handleWaiterCancellation(waiterId)
+            }
+        }
+
+        // After resuming (either from release or cancellation), increment active count
+        // Only if we weren't cancelled - cancelled tasks should not count as active
+        if !Task.isCancelled {
+            activeExtractions += 1
+        }
+    }
+
+    /// Handle cancellation of a waiting task
+    /// Removes the continuation from the waiting list and resumes it
+    private func handleWaiterCancellation(_ waiterId: UUID) {
+        if let index = waitingContinuations.firstIndex(where: { $0.id == waiterId }) {
+            let waiter = waitingContinuations.remove(at: index)
+            // Resume continuation so task can check for cancellation and exit cleanly
+            waiter.continuation.resume()
         }
     }
 
     private func releaseSemaphore() {
-        if let waiting = waitingContinuations.first {
+        if let waiter = waitingContinuations.first {
             waitingContinuations.removeFirst()
-            waiting.resume()
+            waiter.continuation.resume()
         } else {
             activeExtractions -= 1
         }
