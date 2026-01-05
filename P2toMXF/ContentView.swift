@@ -40,7 +40,7 @@ struct ContentView: View {
                             if case .success(let urls) = result, let url = urls.first {
                                 // Use viewModel's tracked access (released when card is removed)
                                 _ = viewModel.startSecurityAccess(for: url)
-                                viewModel.loadP2Card(from: url)
+                                viewModel.loadP2Cards(from: url)
                             }
                         }
 
@@ -109,6 +109,9 @@ struct ContentView: View {
             Button("OK") { viewModel.errorMessage = nil }
         } message: {
             Text(viewModel.errorMessage ?? "")
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openP2Card)) { _ in
+            showingP2Picker = true
         }
     }
 

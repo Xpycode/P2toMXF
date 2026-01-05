@@ -34,6 +34,42 @@ class P2CardParser {
         return true
     }
 
+
+    /// Discovers all P2 cards within a folder (or returns the folder itself if it's a P2 card)
+    /// - Parameter url: The folder to search
+    /// - Returns: Array of URLs pointing to P2 card root directories
+    func discoverP2Cards(in url: URL) -> [URL] {
+        // First check if the URL itself is a P2 card
+        if validateP2Structure(at: url) {
+            return [url]
+        }
+
+        // Otherwise, search immediate subdirectories for P2 cards
+        let fm = FileManager.default
+        var discoveredCards: [URL] = []
+
+        do {
+            let contents = try fm.contentsOfDirectory(at: url, includingPropertiesForKeys: [.isDirectoryKey])
+            for item in contents {
+                // Check if it's a directory
+                guard let values = try? item.resourceValues(forKeys: [.isDirectoryKey]),
+                      values.isDirectory == true else {
+                    continue
+                }
+
+                // Check if this directory is a P2 card
+                if validateP2Structure(at: item) {
+                    discoveredCards.append(item)
+                }
+            }
+        } catch {
+            print("[P2CardParser] Failed to enumerate directory: \(error.localizedDescription)")
+        }
+
+        // Sort by folder name for consistent ordering
+        return discoveredCards.sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
+
     /// Parses a P2 card and returns all clips found
     func parseP2Card(at url: URL) throws -> P2Card {
         guard validateP2Structure(at: url) else {
