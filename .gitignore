@@ -48,3 +48,21 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+
+# Temporary planning/review files
+*PLAN*.md
+*CHECKLIST*.md
+code-review*.md
+SESSION-LOG*.md
+fix-plan*.md
+*-README-addition.md
+
+# Icon exports and design assets
+P2toMXF-icon-NanoBanana Exports/
+*.icon
+
+# Scripts (keep in local dev only)
+bundle-ffmpeg.sh
+
+# Serena memories
+.serena/
