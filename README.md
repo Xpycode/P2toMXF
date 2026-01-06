@@ -2,6 +2,7 @@
 
 A native macOS app that merges Panasonic P2 card clips into self-contained MXF or MOV files — **without re-encoding**.
 
+[![Download](https://img.shields.io/badge/Download-v1.1-brightgreen)](https://github.com/Xpycode/P2toMXF/releases/download/v1.1/P2toMXF-1.1.dmg)
 ![macOS](https://img.shields.io/badge/macOS-14.0+-blue)
 ![Swift](https://img.shields.io/badge/Swift-6.0-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -59,8 +60,8 @@ P2toMXF solves this by using the **BMX toolkit** (developed by BBC) which has ma
 
 ## Installation
 
-### Download Release
-Download the latest `.dmg` from [Releases](../../releases) and drag to Applications.
+1. Download [`P2toMXF-1.1.dmg`](https://github.com/Xpycode/P2toMXF/releases/download/v1.1/P2toMXF-1.1.dmg) from [Releases](https://github.com/Xpycode/P2toMXF/releases/latest)
+2. Open the DMG and drag P2toMXF to Applications
 
 ### Build from Source
 ```bash
