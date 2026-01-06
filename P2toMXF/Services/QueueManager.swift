@@ -175,15 +175,16 @@ class QueueManager: ObservableObject {
                 try data.write(to: fileURL, options: .atomic)
 
                 // Clear any previous error on success
-                await MainActor.run {
+                await MainActor.run { [weak self] in
                     self?.persistenceError = nil
                 }
             } catch {
                 // Surface the error to UI (only first occurrence to avoid spam)
-                await MainActor.run {
+                let errorMessage = error.localizedDescription
+                await MainActor.run { [weak self] in
                     if self?.persistenceError == nil {
-                        self?.persistenceError = "Queue may not persist: \(error.localizedDescription)"
-                        self?.log("Warning: Failed to save queue - \(error.localizedDescription)")
+                        self?.persistenceError = "Queue may not persist: \(errorMessage)"
+                        self?.log("Warning: Failed to save queue - \(errorMessage)")
                     }
                 }
             }
