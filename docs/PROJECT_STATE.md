@@ -3,11 +3,12 @@
 ## Quick Facts
 - **Project:** P2toMXF
 - **Started:** 2026-01-01
-- **Current Phase:** polish
-- **Last Session:** 2026-01-05
+- **Current Phase:** done
+- **Version:** 1.2 (build 1200)
+- **Last Session:** 2026-04-13
 
 ## Current Focus
-App is **working and feature-complete**. Successfully merges P2 card clips into single MXF/MOV files using BMX + FFmpeg pipeline.
+Production review complete — **0 Critical, 0 High issues remaining**. Code split into focused files (all under 500 lines). Ready to ship pending app minimums audit (Sparkle, logging).
 
 ## What It Does
 macOS utility that converts Panasonic P2 card footage:
@@ -45,11 +46,15 @@ macOS utility that converts Panasonic P2 card footage:
 See [decisions.md](decisions.md) for full history.
 
 ## Blockers
-None - app is working.
+None.
 
 ## Next Actions
 1. [x] Notarization - Done, app distributed via GitHub
-2. [ ] Evaluate moving FFmpeg to download script (59MB in repo)
+2. [x] Production review — 9 issues fixed (2026-04-13)
+3. [x] File splitting — all files under 500 lines (2026-04-13)
+4. [ ] App minimums: Sparkle auto-update, diagnostic logging
+5. [ ] UI audit: empty/loading/error states
+6. [ ] Evaluate moving FFmpeg to download script (59MB in repo)
 
 ---
 *Updated automatically by Claude during sessions*

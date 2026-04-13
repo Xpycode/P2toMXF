@@ -20,6 +20,8 @@
 | 2026-01-04 | Bug Fixes | Queue panel sizing, thumbnail jitter, verification fixes |
 | 2026-01-04 | Display Fixes | Job name suffix bug, re-verify capability |
 | 2026-01-05 | Multi-Card | Load multiple P2 cards from parent folder, Cmd+O shortcut |
+| 2026-04-13 | [Production Review](review-2026-04-13.md) | Fixed 3 Critical + 4 High + 2 Medium issues, build verified |
+| 2026-04-13 | [v1.2 Polish](2026-04-13.md) | Version bump, file splits (4 files → 15), all under 500 lines |
 
 **Note:** Detailed session logs are in [CLAUDE.md](../../../CLAUDE.md) under "Session Log" sections.
 

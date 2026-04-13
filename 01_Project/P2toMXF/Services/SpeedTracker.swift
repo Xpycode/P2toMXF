@@ -23,9 +23,9 @@ class SpeedTracker: ObservableObject {
 
     // MARK: - Persistence
 
-    private var recordsFileURL: URL {
+    private var recordsFileURL: URL? {
         guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
-            fatalError("Application Support directory unavailable - this should never happen on macOS")
+            return nil
         }
         let appFolder = appSupport.appendingPathComponent("P2toMXF", isDirectory: true)
         try? FileManager.default.createDirectory(at: appFolder, withIntermediateDirectories: true)
@@ -41,27 +41,36 @@ class SpeedTracker: ObservableObject {
     // MARK: - Persistence Methods
 
     private func loadRecords() {
-        guard FileManager.default.fileExists(atPath: recordsFileURL.path) else { return }
+        guard let fileURL = recordsFileURL,
+              FileManager.default.fileExists(atPath: fileURL.path) else { return }
 
         do {
-            let data = try Data(contentsOf: recordsFileURL)
+            let data = try Data(contentsOf: fileURL)
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
             records = try decoder.decode([ConversionSpeedRecord].self, from: data)
         } catch {
+            #if DEBUG
             print("Failed to load speed records: \(error)")
+            #endif
         }
     }
 
     private func saveRecords() {
-        do {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted]
-            encoder.dateEncodingStrategy = .iso8601
-            let data = try encoder.encode(records)
-            try data.write(to: recordsFileURL, options: .atomic)
-        } catch {
-            print("Failed to save speed records: \(error)")
+        guard let fileURL = recordsFileURL else { return }
+
+        Task.detached(priority: .background) { [records] in
+            do {
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.prettyPrinted]
+                encoder.dateEncodingStrategy = .iso8601
+                let data = try encoder.encode(records)
+                try data.write(to: fileURL, options: .atomic)
+            } catch {
+                #if DEBUG
+                print("Failed to save speed records: \(error)")
+                #endif
+            }
         }
     }
 

@@ -67,3 +67,6 @@ bundle-ffmpeg.sh
 # Serena memories
 .serena/
 APP/
+
+# Embedding cache
+.fastembed_cache/

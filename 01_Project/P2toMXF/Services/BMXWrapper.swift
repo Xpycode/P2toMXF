@@ -37,16 +37,22 @@ class BMXWrapper {
 
     // MARK: - Properties
 
-    private var currentProcess: Process?
+    private var _currentProcess: Process?
     private let toolResolver = BundledToolResolver.shared
 
     // MARK: - Thread Safety
 
-    /// Lock protecting the cancellation flag
+    /// Lock protecting the cancellation flag and current process reference
     /// Required because `cancel()` is called from main thread while
-    /// `terminationHandler` reads on a background queue
+    /// `terminationHandler` and `runBMX` operate on background queues
     private let cancelLock = NSLock()
     private var _isCancelling = false
+
+    /// Thread-safe access to the current process
+    private var currentProcess: Process? {
+        get { cancelLock.withLock { _currentProcess } }
+        set { cancelLock.withLock { _currentProcess = newValue } }
+    }
 
     /// Thread-safe cancellation flag
     private var isCancelling: Bool {
@@ -180,15 +186,11 @@ class BMXWrapper {
         private var _output = ""
 
         func append(_ string: String) {
-            lock.lock()
-            _output += string
-            lock.unlock()
+            lock.withLock { _output += string }
         }
 
         var output: String {
-            lock.lock()
-            defer { lock.unlock() }
-            return _output
+            lock.withLock { _output }
         }
     }
 

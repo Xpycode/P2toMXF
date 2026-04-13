@@ -63,7 +63,9 @@ class P2CardParser {
                 }
             }
         } catch {
+            #if DEBUG
             print("[P2CardParser] Failed to enumerate directory: \(error.localizedDescription)")
+            #endif
         }
 
         // Sort by folder name for consistent ordering
@@ -93,7 +95,9 @@ class P2CardParser {
                 clips.append(clip)
             } catch {
                 parseErrors.append(ClipParseError(file: xmlFile, error: error))
+                #if DEBUG
                 print("[P2CardParser] Failed to parse \(xmlFile.lastPathComponent): \(error.localizedDescription)")
+                #endif
             }
         }
 

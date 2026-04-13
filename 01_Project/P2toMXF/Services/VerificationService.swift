@@ -35,8 +35,19 @@ class VerificationService {
     /// Log callback for console output
     typealias LogHandler = (String) -> Void
 
-    private var currentProcess: Process?
-    private(set) var isCancelling = false
+    private var _currentProcess: Process?
+    private let cancelLock = NSLock()
+    private var _isCancelling = false
+
+    /// Thread-safe access to the current process (read/written from multiple threads)
+    private var currentProcess: Process? {
+        get { cancelLock.withLock { _currentProcess } }
+        set { cancelLock.withLock { _currentProcess = newValue } }
+    }
+    private(set) var isCancelling: Bool {
+        get { cancelLock.withLock { _isCancelling } }
+        set { cancelLock.withLock { _isCancelling = newValue } }
+    }
     private let toolResolver = BundledToolResolver.shared
 
     // MARK: - Tool Paths
@@ -556,20 +567,28 @@ class VerificationService {
         logHandler: @escaping LogHandler
     ) async throws -> ProcessDecodeResult {
         /// Thread-safe container for mutable state shared across Process callbacks.
-        ///
-        /// # Threading Contract
-        /// This class is marked `@unchecked Sendable` because it's designed for
-        /// single-writer semantics within the decode process context:
-        /// - Only the `readabilityHandler` closure writes to properties
-        /// - The `terminationHandler` reads after the readabilityHandler is cleared
-        /// - No concurrent write access occurs in practice
-        ///
-        /// **Note:** While not using explicit locks, the sequential nature of
-        /// pipe reading and process termination provides implicit synchronization.
+        /// Uses NSLock to protect against concurrent GCD pipe callback writes.
         final class DecodeState: @unchecked Sendable {
-            var lastFrameCount = 0
-            var lastSpeed: String?
-            var errorOutput = ""
+            private let lock = NSLock()
+            private var _lastFrameCount = 0
+            private var _lastSpeed: String?
+            private var _errorOutput = ""
+
+            var lastFrameCount: Int {
+                get { lock.withLock { _lastFrameCount } }
+                set { lock.withLock { _lastFrameCount = newValue } }
+            }
+            var lastSpeed: String? {
+                get { lock.withLock { _lastSpeed } }
+                set { lock.withLock { _lastSpeed = newValue } }
+            }
+            var errorOutput: String {
+                get { lock.withLock { _errorOutput } }
+                set { lock.withLock { _errorOutput = newValue } }
+            }
+            func appendError(_ str: String) {
+                lock.withLock { _errorOutput += str }
+            }
         }
         let state = DecodeState()
 
@@ -586,7 +605,7 @@ class VerificationService {
                 let data = handle.availableData
                 guard let str = String(data: data, encoding: .utf8), !str.isEmpty else { return }
 
-                state.errorOutput += str
+                state.appendError(str)
 
                 // Parse frame count and speed from FFmpeg output
                 // Format: "frame=  123 fps= 45.6 ... speed=12.3x"

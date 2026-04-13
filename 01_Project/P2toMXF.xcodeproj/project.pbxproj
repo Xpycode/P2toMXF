@@ -34,6 +34,17 @@
 		A01000016 /* ClipRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000018 /* ClipRowView.swift */; };
 		A01000017 /* JobRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000019 /* JobRowView.swift */; };
 		A01000018 /* ReportGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0200001A /* ReportGenerator.swift */; };
+		A01000019 /* ConversionJob.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0200001B /* ConversionJob.swift */; };
+		A0100001A /* ProgressModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0200001C /* ProgressModels.swift */; };
+		A0100001B /* VerificationModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0200001D /* VerificationModels.swift */; };
+		A0100001C /* ConversionViewModel+CardManagement.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0200001E /* ConversionViewModel+CardManagement.swift */; };
+		A0100001D /* ConversionViewModel+RecordGroups.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0200001F /* ConversionViewModel+RecordGroups.swift */; };
+		A0100001E /* ConversionViewModel+Conversion.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000020 /* ConversionViewModel+Conversion.swift */; };
+		A0100001F /* FFmpegWrapper+Conversion.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000024 /* FFmpegWrapper+Conversion.swift */; };
+		A01000020 /* FFmpegWrapper+Thumbnails.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000025 /* FFmpegWrapper+Thumbnails.swift */; };
+		A01000022 /* QueueManager+Operations.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000021 /* QueueManager+Operations.swift */; };
+		A01000023 /* QueueManager+Processing.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000022 /* QueueManager+Processing.swift */; };
+		A01000024 /* QueueManager+Verification.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000023 /* QueueManager+Verification.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -66,6 +77,17 @@
 		A02000018 /* ClipRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipRowView.swift; sourceTree = "<group>"; };
 		A02000019 /* JobRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JobRowView.swift; sourceTree = "<group>"; };
 		A0200001A /* ReportGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportGenerator.swift; sourceTree = "<group>"; };
+		A0200001B /* ConversionJob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionJob.swift; sourceTree = "<group>"; };
+		A0200001C /* ProgressModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressModels.swift; sourceTree = "<group>"; };
+		A0200001D /* VerificationModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerificationModels.swift; sourceTree = "<group>"; };
+		A0200001E /* ConversionViewModel+CardManagement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversionViewModel+CardManagement.swift"; sourceTree = "<group>"; };
+		A0200001F /* ConversionViewModel+RecordGroups.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversionViewModel+RecordGroups.swift"; sourceTree = "<group>"; };
+		A02000020 /* ConversionViewModel+Conversion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversionViewModel+Conversion.swift"; sourceTree = "<group>"; };
+		A02000021 /* QueueManager+Operations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "QueueManager+Operations.swift"; sourceTree = "<group>"; };
+		A02000022 /* QueueManager+Processing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "QueueManager+Processing.swift"; sourceTree = "<group>"; };
+		A02000023 /* QueueManager+Verification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "QueueManager+Verification.swift"; sourceTree = "<group>"; };
+		A02000024 /* FFmpegWrapper+Conversion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FFmpegWrapper+Conversion.swift"; sourceTree = "<group>"; };
+		A02000025 /* FFmpegWrapper+Thumbnails.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FFmpegWrapper+Thumbnails.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -111,6 +133,9 @@
 				A02000001 /* P2toMXFApp.swift */,
 				A02000002 /* ContentView.swift */,
 				A02000007 /* ConversionViewModel.swift */,
+				A0200001E /* ConversionViewModel+CardManagement.swift */,
+				A0200001F /* ConversionViewModel+RecordGroups.swift */,
+				A02000020 /* ConversionViewModel+Conversion.swift */,
 				A04000004 /* Models */,
 				A04000005 /* Services */,
 				A04000007 /* Views */,
@@ -134,6 +159,9 @@
 			isa = PBXGroup;
 			children = (
 				A02000006 /* P2Clip.swift */,
+				A0200001B /* ConversionJob.swift */,
+				A0200001C /* ProgressModels.swift */,
+				A0200001D /* VerificationModels.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -143,10 +171,15 @@
 			children = (
 				A02000004 /* P2CardParser.swift */,
 				A02000005 /* FFmpegWrapper.swift */,
+				A02000024 /* FFmpegWrapper+Conversion.swift */,
+				A02000025 /* FFmpegWrapper+Thumbnails.swift */,
 				23438BE22F067E0400ACE31E /* BMXWrapper.swift */,
 				A02000014 /* BundledToolResolver.swift */,
 				A0200000C /* ThumbnailManager.swift */,
 				A0200000D /* QueueManager.swift */,
+				A02000021 /* QueueManager+Operations.swift */,
+				A02000022 /* QueueManager+Processing.swift */,
+				A02000023 /* QueueManager+Verification.swift */,
 				A02000010 /* SpeedTracker.swift */,
 				A02000011 /* VerificationService.swift */,
 				A0200001A /* ReportGenerator.swift */,
@@ -284,6 +317,8 @@
 				A01000002 /* ContentView.swift in Sources */,
 				A01000004 /* P2CardParser.swift in Sources */,
 				A01000005 /* FFmpegWrapper.swift in Sources */,
+				A0100001F /* FFmpegWrapper+Conversion.swift in Sources */,
+				A01000020 /* FFmpegWrapper+Thumbnails.swift in Sources */,
 				A01000006 /* P2Clip.swift in Sources */,
 				A01000007 /* ConversionViewModel.swift in Sources */,
 				A0100000A /* ThumbnailManager.swift in Sources */,
@@ -301,6 +336,15 @@
 				A01000016 /* ClipRowView.swift in Sources */,
 				A01000017 /* JobRowView.swift in Sources */,
 				A01000018 /* ReportGenerator.swift in Sources */,
+				A01000019 /* ConversionJob.swift in Sources */,
+				A0100001A /* ProgressModels.swift in Sources */,
+				A0100001B /* VerificationModels.swift in Sources */,
+				A0100001C /* ConversionViewModel+CardManagement.swift in Sources */,
+				A0100001D /* ConversionViewModel+RecordGroups.swift in Sources */,
+				A0100001E /* ConversionViewModel+Conversion.swift in Sources */,
+				A01000022 /* QueueManager+Operations.swift in Sources */,
+				A01000023 /* QueueManager+Processing.swift in Sources */,
+				A01000024 /* QueueManager+Verification.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -437,7 +481,7 @@
 				CODE_SIGN_ENTITLEMENTS = P2toMXF/P2toMXF.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 1200;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -456,7 +500,7 @@
 					"$(PROJECT_DIR)/P2toMXF/Resources/lib",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 1.0.2;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.p2tomxf.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -472,7 +516,7 @@
 				CODE_SIGN_ENTITLEMENTS = P2toMXF/P2toMXF.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 1200;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -491,7 +535,7 @@
 					"$(PROJECT_DIR)/P2toMXF/Resources/lib",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 1.0.2;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.p2tomxf.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;

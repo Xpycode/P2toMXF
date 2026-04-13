@@ -188,8 +188,9 @@ actor ThumbnailManager {
     /// Extract a frame with semaphore-controlled concurrency
     private func extractFrameWithSemaphore(from url: URL, atSeconds timestamp: Double) async -> NSImage? {
         // Wait for semaphore slot
-        await acquireSemaphore()
-        defer { releaseSemaphore() }  // ALWAYS release, even on cancellation or error
+        let acquired = await acquireSemaphore()
+        guard acquired else { return nil }  // Cancelled while waiting
+        defer { releaseSemaphore() }
 
         // Check for cancellation before starting expensive operation
         guard !Task.isCancelled else { return nil }
@@ -199,10 +200,11 @@ actor ThumbnailManager {
 
     // MARK: - Semaphore Implementation
 
-    private func acquireSemaphore() async {
+    /// Returns true if the semaphore was acquired, false if cancelled while waiting.
+    private func acquireSemaphore() async -> Bool {
         if activeExtractions < maxConcurrentExtractions {
             activeExtractions += 1
-            return
+            return true
         }
 
         // Generate unique ID for this waiter (for cancellation tracking)
@@ -221,27 +223,36 @@ actor ThumbnailManager {
             }
         }
 
-        // After resuming (either from release or cancellation), increment active count
-        // Only if we weren't cancelled - cancelled tasks should not count as active
-        if !Task.isCancelled {
-            activeExtractions += 1
+        // Check if we were cancelled. If so, we were NOT granted a slot —
+        // handleWaiterCancellation just resumed us to unblock. Don't touch the count.
+        if Task.isCancelled {
+            return false
         }
+
+        // We were resumed by releaseSemaphore(), which means a slot was freed for us.
+        // The slot was already "transferred" — increment to claim it.
+        activeExtractions += 1
+        return true
     }
 
     /// Handle cancellation of a waiting task
     /// Removes the continuation from the waiting list and resumes it
+    /// Does NOT grant a slot — the resumed task checks Task.isCancelled and returns false
     private func handleWaiterCancellation(_ waiterId: UUID) {
         if let index = waitingContinuations.firstIndex(where: { $0.id == waiterId }) {
             let waiter = waitingContinuations.remove(at: index)
             // Resume continuation so task can check for cancellation and exit cleanly
+            // No slot is granted — the waiter will return false from acquireSemaphore
             waiter.continuation.resume()
         }
     }
 
     private func releaseSemaphore() {
         if let waiter = waitingContinuations.first {
+            // Transfer our slot to the next waiter (they will increment activeExtractions)
             waitingContinuations.removeFirst()
-            waiter.continuation.resume()
+            activeExtractions -= 1  // Release our slot
+            waiter.continuation.resume()  // Waiter will re-increment in acquireSemaphore
         } else {
             activeExtractions -= 1
         }
