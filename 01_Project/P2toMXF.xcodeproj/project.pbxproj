@@ -25,6 +25,9 @@
 		A0100000D /* ProgressControlPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0200000F /* ProgressControlPanel.swift */; };
 		A0100000E /* SpeedTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000010 /* SpeedTracker.swift */; };
 		A0100000F /* VerificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000011 /* VerificationService.swift */; };
+		A01000025 /* DiskSpace.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000026 /* DiskSpace.swift */; };
+		A01000027 /* TempDirectoryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000028 /* TempDirectoryManager.swift */; };
+		A01000028 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000029 /* Theme.swift */; };
 		A01000010 /* EstimateSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000012 /* EstimateSheet.swift */; };
 		A01000011 /* CardListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000013 /* CardListView.swift */; };
 		A01000012 /* BundledToolResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = A02000014 /* BundledToolResolver.swift */; };
@@ -68,6 +71,9 @@
 		A0200000F /* ProgressControlPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressControlPanel.swift; sourceTree = "<group>"; };
 		A02000010 /* SpeedTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeedTracker.swift; sourceTree = "<group>"; };
 		A02000011 /* VerificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerificationService.swift; sourceTree = "<group>"; };
+		A02000026 /* DiskSpace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiskSpace.swift; sourceTree = "<group>"; };
+		A02000028 /* TempDirectoryManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TempDirectoryManager.swift; sourceTree = "<group>"; };
+		A02000029 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		A02000012 /* EstimateSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EstimateSheet.swift; sourceTree = "<group>"; };
 		A02000013 /* CardListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardListView.swift; sourceTree = "<group>"; };
 		A02000014 /* BundledToolResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BundledToolResolver.swift; sourceTree = "<group>"; };
@@ -132,6 +138,7 @@
 			children = (
 				A02000001 /* P2toMXFApp.swift */,
 				A02000002 /* ContentView.swift */,
+				A02000029 /* Theme.swift */,
 				A02000007 /* ConversionViewModel.swift */,
 				A0200001E /* ConversionViewModel+CardManagement.swift */,
 				A0200001F /* ConversionViewModel+RecordGroups.swift */,
@@ -182,6 +189,8 @@
 				A02000023 /* QueueManager+Verification.swift */,
 				A02000010 /* SpeedTracker.swift */,
 				A02000011 /* VerificationService.swift */,
+				A02000026 /* DiskSpace.swift */,
+				A02000028 /* TempDirectoryManager.swift */,
 				A0200001A /* ReportGenerator.swift */,
 			);
 			path = Services;
@@ -327,6 +336,9 @@
 				A0100000D /* ProgressControlPanel.swift in Sources */,
 				A0100000E /* SpeedTracker.swift in Sources */,
 				A0100000F /* VerificationService.swift in Sources */,
+				A01000025 /* DiskSpace.swift in Sources */,
+				A01000027 /* TempDirectoryManager.swift in Sources */,
+				A01000028 /* Theme.swift in Sources */,
 				A01000010 /* EstimateSheet.swift in Sources */,
 				A01000011 /* CardListView.swift in Sources */,
 				A01000012 /* BundledToolResolver.swift in Sources */,

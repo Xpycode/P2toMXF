@@ -46,12 +46,18 @@ extension QueueManager {
             log("Estimated time: \(estimate.formattedEstimate) (\(estimate.formattedSpeed))")
         }
 
-        // Resolve bookmarks and start security-scoped access
+        // Resolve bookmarks and start security-scoped access.
+        // IMPORTANT: Only copy back the bookmark-related fields that `resolve*Bookmark()`
+        // may mutate — never assign the whole struct, which would clobber `status`,
+        // `startedAt`, and `progress` set by the preparing update above.
         var mutableJob = job
         let cardURL: URL
         if let resolvedCardURL = mutableJob.resolveCardBookmark() {
             cardURL = resolvedCardURL
-            updateJob(jobId) { $0 = mutableJob }
+            updateJob(jobId) { j in
+                j.cardBookmarkData = mutableJob.cardBookmarkData
+                j.cardPath = mutableJob.cardPath
+            }
         } else {
             cardURL = job.cardPath
         }
@@ -59,7 +65,9 @@ extension QueueManager {
         let outputDirURL: URL
         if let resolvedOutputURL = mutableJob.resolveOutputBookmark() {
             outputDirURL = resolvedOutputURL
-            updateJob(jobId) { $0 = mutableJob }
+            updateJob(jobId) { j in
+                j.outputBookmarkData = mutableJob.outputBookmarkData
+            }
         } else {
             outputDirURL = job.destinationURL.deletingLastPathComponent()
         }
@@ -94,6 +102,17 @@ extension QueueManager {
                 stopAccessingIfNeeded(outputDirURL)
             }
         }
+
+        // Preflight: fail fast if there isn't enough free space on the temp or output volume.
+        let tempDir = TempDirectoryManager.shared.effectiveTempDirectory
+        if let spaceError = preflightDiskSpaceError(for: job, tempDir: tempDir, outputDir: outputDirURL) {
+            updateJob(jobId) { $0.status = .failed(spaceError) }
+            log("FAILED preflight: \(spaceError)")
+            currentJobId = nil
+            currentJobEstimate = nil
+            return
+        }
+        log("Preflight OK — \(preflightSummary(for: job, tempDir: tempDir, outputDir: outputDirURL))")
 
         let startTime = Date()
         let totalBytes = job.clips.reduce(Int64(0)) { $0 + $1.totalFileSize }
@@ -314,6 +333,71 @@ extension QueueManager {
     func dismissSlowSpeedWarning() {
         slowSpeedWarning = nil
         speedTracker.clearSpeedWarning()
+    }
+
+    // MARK: - Preflight Disk Space Check
+
+    /// Returns a human-readable error string if there is not enough free space to run the job,
+    /// or nil if the job can safely start. Applies a 10% safety margin on top of the source size.
+    /// Accounts for the case where temp and output share the same volume (doubles the requirement).
+    func preflightDiskSpaceError(
+        for job: ConversionJob,
+        tempDir: URL,
+        outputDir: URL
+    ) -> String? {
+        let requiredBase = job.clips.reduce(Int64(0)) { $0 + $1.totalFileSize }
+        let requiredWithMargin = Int64(Double(requiredBase) * 1.10)
+
+        let shareVolume = DiskSpace.sameVolume(tempDir, outputDir)
+
+        if shareVolume {
+            // Temp and output on same volume — we need 2x the required amount on that one disk.
+            let combined = requiredWithMargin * 2
+            guard let free = DiskSpace.availableCapacity(for: tempDir) else { return nil }
+            if free < combined {
+                let name = DiskSpace.volumeName(for: tempDir) ?? "the selected volume"
+                return "Not enough space on \(name): \(DiskSpace.formatBytes(free)) free, " +
+                    "~\(DiskSpace.formatBytes(combined)) required (temp + output on same volume). " +
+                    "Choose a different temp folder in File → Temp Folder… to split the load."
+            }
+            return nil
+        }
+
+        // Separate volumes — check each independently.
+        if let freeTemp = DiskSpace.availableCapacity(for: tempDir), freeTemp < requiredWithMargin {
+            let name = DiskSpace.volumeName(for: tempDir) ?? "temp volume"
+            return "Not enough space on \(name) (temp): \(DiskSpace.formatBytes(freeTemp)) free, " +
+                "~\(DiskSpace.formatBytes(requiredWithMargin)) required. " +
+                "Choose a different temp folder in File → Temp Folder…"
+        }
+        if let freeOut = DiskSpace.availableCapacity(for: outputDir), freeOut < requiredWithMargin {
+            let name = DiskSpace.volumeName(for: outputDir) ?? "output volume"
+            return "Not enough space on \(name) (output): \(DiskSpace.formatBytes(freeOut)) free, " +
+                "~\(DiskSpace.formatBytes(requiredWithMargin)) required."
+        }
+        return nil
+    }
+
+    /// Human-readable summary of a preflight check's findings, used for console logging on success.
+    /// Includes volume names, free capacity, and the required-byte estimate (source size + 10% margin).
+    func preflightSummary(
+        for job: ConversionJob,
+        tempDir: URL,
+        outputDir: URL
+    ) -> String {
+        let requiredBase = job.clips.reduce(Int64(0)) { $0 + $1.totalFileSize }
+        let requiredWithMargin = Int64(Double(requiredBase) * 1.10)
+        let needStr = DiskSpace.formatBytes(requiredWithMargin)
+
+        let tempName = DiskSpace.volumeName(for: tempDir) ?? "temp volume"
+        let outName = DiskSpace.volumeName(for: outputDir) ?? "output volume"
+        let tempFreeStr = DiskSpace.availableCapacity(for: tempDir).map(DiskSpace.formatBytes) ?? "unknown"
+        let outFreeStr = DiskSpace.availableCapacity(for: outputDir).map(DiskSpace.formatBytes) ?? "unknown"
+
+        if DiskSpace.sameVolume(tempDir, outputDir) {
+            return "Temp: \(tempName) (\(tempFreeStr) free), Output: same volume; need ~\(needStr)"
+        }
+        return "Temp: \(tempName) (\(tempFreeStr) free), Output: \(outName) (\(outFreeStr) free); need ~\(needStr)"
     }
 
     /// Checks current conversion speed and sets warning if significantly slow

@@ -96,9 +96,6 @@ class ConversionViewModel: ObservableObject {
     /// Current progress metrics for active conversion
     @Published var progressMetrics = ProgressMetrics()
 
-    /// Timer for updating elapsed time display
-    private var elapsedTimer: Timer?
-
     var hasFFmpeg: Bool {
         ffmpeg.isFFmpegAvailable
     }
@@ -119,29 +116,16 @@ class ConversionViewModel: ObservableObject {
         consoleLines.removeAll()
     }
 
-    // MARK: - Progress Timer
+    // MARK: - Progress Metrics
 
-    /// Starts the elapsed time timer and initializes progress metrics
-    func startProgressTimer(totalClips: Int) {
+    /// Initializes progress metrics for a new conversion.
+    /// Elapsed time and remaining estimates are driven by `TimelineView` in the UI layer;
+    /// no manual Timer is needed here.
+    func initProgressMetrics(totalClips: Int) {
         progressMetrics = ProgressMetrics()
         progressMetrics.startTime = Date()
         progressMetrics.totalClips = totalClips
         progressMetrics.phase = "Starting..."
-
-        // Update elapsed time every second for smooth UI updates
-        elapsedTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                // Trigger UI update by touching the progressMetrics
-                // The elapsedSeconds computed property will recalculate
-                self?.objectWillChange.send()
-            }
-        }
-    }
-
-    /// Stops the elapsed time timer
-    func stopProgressTimer() {
-        elapsedTimer?.invalidate()
-        elapsedTimer = nil
     }
 
     /// Updates progress metrics from FFmpeg callback

@@ -49,17 +49,6 @@ struct HeaderView: View {
                 .disabled(viewModel.activeCard == nil || viewModel.isLoading)
                 .help("Reload P2 card from disk")
 
-                // Open output folder
-                Button {
-                    if let outputDir = viewModel.settings.outputDirectory {
-                        NSWorkspace.shared.open(outputDir)
-                    }
-                } label: {
-                    Image(systemName: "folder")
-                }
-                .disabled(viewModel.settings.outputDirectory == nil)
-                .help("Open output folder in Finder")
-
                 // Queue toggle
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {

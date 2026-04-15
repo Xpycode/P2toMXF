@@ -19,24 +19,31 @@ struct ProgressMetrics {
     /// When the conversion started
     var startTime: Date?
 
-    /// Last time the metrics were touched (for triggering elapsed time updates in @Observable)
-    var lastUpdateTime: Date?
-
-    /// Elapsed time in seconds since start
-    var elapsedSeconds: TimeInterval {
-        // Touch lastUpdateTime to ensure this computed property updates when timer fires
-        _ = lastUpdateTime
+    /// Elapsed time in seconds since startTime, measured at the given reference date.
+    func elapsedSeconds(at referenceDate: Date) -> TimeInterval {
         guard let start = startTime else { return 0 }
-        return Date().timeIntervalSince(start)
+        return referenceDate.timeIntervalSince(start)
     }
 
-    /// Estimated time remaining in seconds (based on current progress)
-    var estimatedRemainingSeconds: TimeInterval? {
-        guard progress > 0.05 else { return nil }  // Need at least 5% to estimate
-        let elapsed = elapsedSeconds
+    /// Estimated time remaining in seconds, measured at the given reference date.
+    /// Requires at least 5% progress before producing an estimate.
+    func estimatedRemainingSeconds(at referenceDate: Date) -> TimeInterval? {
+        guard progress > 0.05 else { return nil }
+        let elapsed = elapsedSeconds(at: referenceDate)
         guard elapsed > 0 else { return nil }
         let totalEstimated = elapsed / progress
         return max(0, totalEstimated - elapsed)
+    }
+
+    /// Format elapsed time as MM:SS or HH:MM:SS at the given reference date.
+    func formattedElapsed(at referenceDate: Date) -> String {
+        formatTimeInterval(elapsedSeconds(at: referenceDate))
+    }
+
+    /// Format estimated remaining at the given reference date, if available.
+    func formattedRemaining(at referenceDate: Date) -> String? {
+        guard let remaining = estimatedRemainingSeconds(at: referenceDate) else { return nil }
+        return formatTimeInterval(remaining)
     }
 
     /// FFmpeg-reported speed (e.g., "12.5x")
@@ -53,17 +60,6 @@ struct ProgressMetrics {
 
     /// Total expected frames (if known)
     var totalFrames: Int?
-
-    /// Format elapsed time as MM:SS or HH:MM:SS
-    var formattedElapsed: String {
-        formatTimeInterval(elapsedSeconds)
-    }
-
-    /// Format estimated remaining as MM:SS or HH:MM:SS
-    var formattedRemaining: String? {
-        guard let remaining = estimatedRemainingSeconds else { return nil }
-        return formatTimeInterval(remaining)
-    }
 
     /// Format speed and fps for display
     var formattedSpeed: String? {

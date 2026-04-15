@@ -6,6 +6,7 @@ import SwiftUI
 struct FooterControlsView: View {
     @ObservedObject var viewModel: ConversionViewModel
     @ObservedObject var queueManager: QueueManager
+    @ObservedObject private var tempManager = TempDirectoryManager.shared
     @Binding var showingOutputPicker: Bool
 
     var body: some View {
@@ -164,7 +165,45 @@ struct FooterControlsView: View {
                         .fixedSize()
                 }
             }
+
+            Spacer(minLength: 12)
+
+            tempFolderBadge
         }
+    }
+
+    // MARK: - Temp Folder Badge
+
+    /// Compact indicator of the current BMX temp folder. Click opens the picker.
+    @ViewBuilder
+    private var tempFolderBadge: some View {
+        Button {
+            NotificationCenter.default.post(name: .chooseTempFolder, object: nil)
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "externaldrive")
+                    .imageScale(.small)
+                Text("Temp:")
+                    .foregroundStyle(.secondary)
+                Text(tempLabel)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            .font(.caption)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(Color.secondary.opacity(0.08))
+            .cornerRadius(4)
+        }
+        .buttonStyle(.plain)
+        .help("Current BMX temp folder — click to change.")
+        .fixedSize()
+    }
+
+    private var tempLabel: String {
+        guard tempManager.hasCustomDirectory else { return "System" }
+        let url = tempManager.effectiveTempDirectory
+        return DiskSpace.volumeName(for: url) ?? url.lastPathComponent
     }
 
     // MARK: - Group Selection Hint

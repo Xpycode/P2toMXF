@@ -296,7 +296,7 @@ extension FFmpegWrapper {
             return
         }
 
-        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("P2toMXF_\(UUID().uuidString)")
+        let tempDir = await TempDirectoryManager.shared.effectiveTempDirectory.appendingPathComponent("P2toMXF_\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
 
         defer {

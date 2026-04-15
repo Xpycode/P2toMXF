@@ -45,7 +45,7 @@ struct QueueListView: View {
                 }
             }
         }
-        .background(.ultraThinMaterial)
+        .background(Theme.primaryBackground)
     }
 
     // MARK: - Header
@@ -99,16 +99,14 @@ struct QueueListView: View {
     @ViewBuilder
     private var headerStatusSummary: some View {
         if queueManager.isProcessing {
+            // Footer progress panel shows elapsed + remaining in full detail;
+            // a spinner here is enough to indicate the queue is active.
             HStack(spacing: 4) {
                 ProgressView()
                     .scaleEffect(0.5)
                     .frame(width: 16, height: 16)
-                if let estimate = queueManager.currentJobEstimate {
-                    Text(estimate.formattedEstimate)
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("Processing...")
+                if queueManager.pendingCount > 0 {
+                    Text("+\(queueManager.pendingCount) queued")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -122,7 +120,9 @@ struct QueueListView: View {
                     .font(.caption)
                     .foregroundStyle(.orange)
             }
-        } else if queueManager.pendingCount > 0, let totalEstimate = queueManager.getTotalQueueEstimate() {
+        } else if queueManager.pendingCount > 1, let totalEstimate = queueManager.getTotalQueueEstimate() {
+            // Only show the queue total when there are multiple pending jobs —
+            // with a single job the per-row estimate already conveys the same number.
             HStack(spacing: 4) {
                 Image(systemName: "clock")
                     .font(.caption2)
@@ -130,7 +130,7 @@ struct QueueListView: View {
                     .font(.caption.monospacedDigit())
             }
             .foregroundStyle(.secondary)
-            .help("Total estimated time for \(queueManager.pendingCount) pending job(s)")
+            .help("Total estimated time for \(queueManager.pendingCount) pending jobs")
         } else if !queueManager.jobs.isEmpty {
             Text("\(queueManager.completedCount)/\(queueManager.jobs.count) done")
                 .font(.caption)

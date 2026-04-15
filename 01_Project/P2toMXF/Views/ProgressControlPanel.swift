@@ -37,26 +37,29 @@ struct ProgressControlPanel: View {
 
     @ViewBuilder
     private var metricsRow: some View {
-        HStack(spacing: 8) {
-            // Elapsed time
-            MetricLabel(icon: "clock", value: metrics.formattedElapsed)
+        TimelineView(.periodic(from: .now, by: 1.0)) { context in
+            HStack(spacing: 8) {
+                // Elapsed time
+                MetricLabel(icon: "clock",
+                            value: metrics.formattedElapsed(at: context.date))
 
-            // Estimated remaining (if available)
-            if let remaining = metrics.formattedRemaining {
-                Divider()
-                    .frame(height: 12)
-                MetricLabel(icon: "hourglass", value: "~\(remaining)")
-            }
+                // Estimated remaining (if available)
+                if let remaining = metrics.formattedRemaining(at: context.date) {
+                    Divider()
+                        .frame(height: 12)
+                    MetricLabel(icon: "hourglass", value: "~\(remaining)")
+                }
 
-            // Speed (if available)
-            if let speed = metrics.formattedSpeed {
-                Divider()
-                    .frame(height: 12)
-                MetricLabel(icon: "speedometer", value: speed)
+                // Speed (if available)
+                if let speed = metrics.formattedSpeed {
+                    Divider()
+                        .frame(height: 12)
+                    MetricLabel(icon: "speedometer", value: speed)
+                }
             }
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
-        .font(.caption)
-        .foregroundStyle(.secondary)
     }
 }
 

@@ -44,11 +44,10 @@ extension ConversionViewModel {
             }
         }
 
-        // Start progress timer
-        startProgressTimer(totalClips: totalClips)
+        // Initialize progress metrics
+        initProgressMetrics(totalClips: totalClips)
 
         Task {
-            defer { stopProgressTimer() }
 
             var successCount = 0
             var failCount = 0
@@ -184,11 +183,10 @@ extension ConversionViewModel {
             conversionStatus[clip.id] = .pending
         }
 
-        // Start progress timer
-        startProgressTimer(totalClips: clips.count)
+        // Initialize progress metrics
+        initProgressMetrics(totalClips: clips.count)
 
         Task {
-            defer { stopProgressTimer() }
 
             var successCount = 0
             var failCount = 0

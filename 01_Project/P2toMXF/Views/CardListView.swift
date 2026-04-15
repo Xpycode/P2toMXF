@@ -24,7 +24,6 @@ struct CardListView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(Color.secondary.opacity(0.1))
 
             Divider()
 
@@ -36,6 +35,7 @@ struct CardListView: View {
             }
         }
         .frame(minWidth: 200, idealWidth: 220, maxWidth: 280, maxHeight: .infinity)
+        .background(Theme.primaryBackground)
     }
 
     // MARK: - Empty State

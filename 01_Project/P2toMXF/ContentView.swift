@@ -24,7 +24,7 @@ struct ContentView: View {
                     showConsole: $showConsole
                 )
                 .padding()
-                .background(.ultraThinMaterial)
+                .background(Theme.primaryBackground)
 
                 Divider()
 
@@ -55,6 +55,7 @@ struct ContentView: View {
                         }
                     }
                     .frame(minWidth: 400)
+                    .background(Theme.secondaryBackground)
 
                     // Right: Queue panel
                     if showQueue {
@@ -73,7 +74,7 @@ struct ContentView: View {
                     showingOutputPicker: $showingOutputPicker
                 )
                 .padding()
-                .background(.ultraThinMaterial)
+                .background(Theme.primaryBackground)
                 .fileImporter(
                     isPresented: $showingOutputPicker,
                     allowedContentTypes: [.folder],
@@ -90,7 +91,7 @@ struct ContentView: View {
                     }
                 }
             }
-            .frame(minHeight: 900)  // Main content maintains minimum 2
+            .frame(minHeight: 600)  // Keeps toolbar + 3 columns + footer readable; console adds its own height
 
             // Console drawer - extends window when visible
             if showConsole {
@@ -112,6 +113,24 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .openP2Card)) { _ in
             showingP2Picker = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .chooseTempFolder)) { _ in
+            let panel = NSOpenPanel()
+            panel.canChooseFiles = false
+            panel.canChooseDirectories = true
+            panel.allowsMultipleSelection = false
+            panel.prompt = "Choose"
+            panel.message = "Choose a folder for BMX temp files during conversion. " +
+                "Pick a drive with plenty of free space for large P2 jobs."
+            if let current = TempDirectoryManager.shared.customTempDirectory {
+                panel.directoryURL = current
+            }
+            if panel.runModal() == .OK, let url = panel.url {
+                _ = TempDirectoryManager.shared.setCustomTempDirectory(url)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .resetTempFolder)) { _ in
+            TempDirectoryManager.shared.setCustomTempDirectory(nil)
         }
     }
 

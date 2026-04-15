@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 // MARK: - Job Row View
 
@@ -63,7 +64,7 @@ struct JobRowView: View {
             Image(systemName: "checkmark.circle.fill")
                 .foregroundStyle(.green)
         case .failed:
-            Image(systemName: "xmark.circle.fill")
+            Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(.red)
         case .cancelled:
             Image(systemName: "stop.circle.fill")
@@ -78,9 +79,6 @@ struct JobRowView: View {
         switch job.status {
         case .pending:
             HStack(spacing: 8) {
-                // Show estimate
-                QueueEstimateBadge(estimate: queueManager.getEstimate(for: job))
-
                 Button {
                     queueManager.removeJob(job.id)
                 } label: {
@@ -105,11 +103,18 @@ struct JobRowView: View {
             completedTrailingContent
 
         case .failed(let error):
-            HStack(spacing: 4) {
-                Text("Failed")
-                    .font(.caption2)
-                    .foregroundStyle(.red)
-                    .help(error)
+            HStack(alignment: .top, spacing: 4) {
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text("Failed")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.red)
+                    Text(shortErrorMessage(error))
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.trailing)
+                }
+                .help(error)
 
                 Button {
                     queueManager.retryJob(job.id)
@@ -153,6 +158,8 @@ struct JobRowView: View {
                     .font(.caption2)
                     .foregroundStyle(.green)
 
+                revealInFinderButton
+
                 // Verify menu - use Picker-style menu for better click handling
                 verifyMenuButton(isRetry: false)
             }
@@ -178,9 +185,32 @@ struct JobRowView: View {
                     .foregroundStyle(.red)
                     .help(error)
 
+                revealInFinderButton
+
                 // Retry verification
                 verifyMenuButton(isRetry: true)
             }
+        }
+    }
+
+    // MARK: - Reveal in Finder
+
+    /// Reveals the actual output file in Finder with selection.
+    /// Renders nothing if the job has no recorded output URLs.
+    @ViewBuilder
+    private var revealInFinderButton: some View {
+        if let url = job.actualOutputURLs.first {
+            Button {
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            } label: {
+                Image(systemName: "folder")
+                    .font(.caption)
+                    .foregroundStyle(.blue)
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Reveal in Finder")
         }
     }
 
@@ -257,6 +287,8 @@ struct JobRowView: View {
                 }
             }
 
+            revealInFinderButton
+
             // Re-verify menu (allows running different verification mode)
             Menu {
                 Button {
@@ -281,6 +313,73 @@ struct JobRowView: View {
             .help("Run verification again")
             .id("\(job.id)-reverify")
         }
+    }
+
+    // MARK: - Error Message Formatting
+
+    /// Reduces a multi-line, technical error into a concise one- or two-line summary
+    /// suitable for inline display. Maps common failure modes to human-readable causes.
+    private func shortErrorMessage(_ error: String) -> String {
+        let lower = error.lowercased()
+
+        // Recognize common POSIX / libMXF failure modes.
+        if lower.contains("error code 28") || lower.contains("no space") {
+            // Query the current free space of both the temp and output volumes.
+            // The one with the least free space is the likely culprit.
+            let tempURL = TempDirectoryManager.shared.effectiveTempDirectory
+            let outputURL = job.destinationURL.deletingLastPathComponent()
+
+            let tempFree = DiskSpace.availableCapacity(for: tempURL)
+            let outputFree = DiskSpace.availableCapacity(for: outputURL)
+
+            // Prefer whichever has less free space (the one that filled up).
+            let culprit: URL?
+            switch (tempFree, outputFree) {
+            case let (t?, o?):
+                culprit = t <= o ? tempURL : outputURL
+            case (.some, nil):
+                culprit = tempURL
+            case (nil, .some):
+                culprit = outputURL
+            default:
+                culprit = nil
+            }
+
+            if let culprit,
+               let name = DiskSpace.volumeName(for: culprit),
+               let free = DiskSpace.availableCapacity(for: culprit) {
+                return "Out of space on \(name) (\(DiskSpace.formatBytes(free)) free)"
+            }
+            return "Disk full"
+        }
+        if lower.contains("error code 13") || lower.contains("permission denied") {
+            return "Permission denied"
+        }
+        if lower.contains("error code 30") || lower.contains("read-only") {
+            return "Volume is read-only"
+        }
+        if lower.contains("cannot access source") {
+            return "Source folder inaccessible"
+        }
+        if lower.contains("cannot access output") {
+            return "Output folder inaccessible"
+        }
+
+        // Fallback: take the first non-empty line, trim prefixes like "ERROR: ",
+        // "BMX conversion failed: ", and drop internal paths like "near bmx/…".
+        let firstLine = error
+            .split(whereSeparator: { $0.isNewline })
+            .first(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty })
+            .map { String($0) } ?? error
+
+        var cleaned = firstLine
+        for prefix in ["BMX conversion failed:", "ERROR (libMXF):", "ERROR:", "Error:"] {
+            if cleaned.hasPrefix(prefix) {
+                cleaned = String(cleaned.dropFirst(prefix.count))
+                break
+            }
+        }
+        return cleaned.trimmingCharacters(in: .whitespaces)
     }
 
     // MARK: - Background Color

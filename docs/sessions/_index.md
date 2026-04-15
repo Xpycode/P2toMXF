@@ -22,6 +22,10 @@
 | 2026-01-05 | Multi-Card | Load multiple P2 cards from parent folder, Cmd+O shortcut |
 | 2026-04-13 | [Production Review](review-2026-04-13.md) | Fixed 3 Critical + 4 High + 2 Medium issues, build verified |
 | 2026-04-13 | [v1.2 Polish](2026-04-13.md) | Version bump, file splits (4 files → 15), all under 500 lines |
+| 2026-04-13 | [P2 Card Analysis](2026-04-13.md#session-2--p2-card-analysis) | Explored real P2 card structure, reproduced FFmpeg failure, documented problem |
+| 2026-04-13 | [Forum Research](2026-04-13.md#session-4--forum-research--market-validation) | Found 35+ posts across 15+ forums validating the problem P2toMXF solves |
+| 2026-04-13 | [P2 Player Discussion](2026-04-13.md#session-3--p2-player-discussion) | Evaluated preview/player options — deferred, proxy MP4 approach proposed |
+| 2026-04-14 | [UX + Reliability Day](2026-04-14.md) | TimelineView + startedAt fix, disk-space safeguards (DiskSpace/TempDir/preflight), FCP Theme, many UI polish items |
 
 **Note:** Detailed session logs are in [CLAUDE.md](../../../CLAUDE.md) under "Session Log" sections.
 
