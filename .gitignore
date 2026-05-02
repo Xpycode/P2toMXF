@@ -74,3 +74,10 @@ APP/
 # Distribution artifacts (DMGs go to GitHub Releases, not this repo)
 *.dmg
 *.app/
+
+# Bundled third-party binaries (acquired via download script, never committed)
+# History was rewritten 2026-05-02 to strip these — see RELEASE.md / bundle-ffmpeg.sh.
+01_Project/P2toMXF/Resources/ffmpeg
+01_Project/P2toMXF/Resources/bmxtranswrap
+01_Project/P2toMXF/Resources/mxf2raw
+01_Project/P2toMXF/Resources/lib/
