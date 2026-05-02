@@ -70,3 +70,7 @@ APP/
 
 # Embedding cache
 .fastembed_cache/
+
+# Distribution artifacts (DMGs go to GitHub Releases, not this repo)
+*.dmg
+*.app/

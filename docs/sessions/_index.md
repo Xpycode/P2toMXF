@@ -26,6 +26,9 @@
 | 2026-04-13 | [Forum Research](2026-04-13.md#session-4--forum-research--market-validation) | Found 35+ posts across 15+ forums validating the problem P2toMXF solves |
 | 2026-04-13 | [P2 Player Discussion](2026-04-13.md#session-3--p2-player-discussion) | Evaluated preview/player options — deferred, proxy MP4 approach proposed |
 | 2026-04-14 | [UX + Reliability Day](2026-04-14.md) | TimelineView + startedAt fix, disk-space safeguards (DiskSpace/TempDir/preflight), FCP Theme, many UI polish items |
+| 2026-04-15 | [Wrap-Up + v1.3 Prep](2026-04-15.md) | Cookbook extraction (27-29), committed session work, awaiting v1.3 scope |
+| 2026-04-19 | [v1.3 Resume](2026-04-19.md) | Entry state captured — Sparkle Task 1.1 uncommitted, SUPublicEDKey still placeholder |
+| 2026-04-20 | [Sidequest: Avid Audit Feasibility](2026-04-20.md) | Scoped a new app (Avid MediaFiles auditor) reusing ~60% of P2toMXF — decision: fork, don't extend |
 
 **Note:** Detailed session logs are in [CLAUDE.md](../../../CLAUDE.md) under "Session Log" sections.
 

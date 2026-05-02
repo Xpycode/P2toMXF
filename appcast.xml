@@ -1,0 +1,16 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>P2toMXF Updates</title>
+        <description>Appcast for P2toMXF</description>
+        <language>en</language>
+        <!-- Populate with v1.3 release entry after signing, via `generate_appcast` -->
+        <item>
+            <title>Version 1.2</title>
+            <sparkle:version>1200</sparkle:version>
+            <sparkle:shortVersionString>1.2</sparkle:shortVersionString>
+            <description>Current release — manually installed.</description>
+            <pubDate>Tue, 13 Apr 2026 00:00:00 +0000</pubDate>
+        </item>
+    </channel>
+</rss>

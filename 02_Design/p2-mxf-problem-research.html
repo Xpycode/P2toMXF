@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P2toMXF - The Problem We Solve</title>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --surface: #161b22;
+            --surface-hover: #1c2129;
+            --border: #30363d;
+            --text: #e6edf3;
+            --text-muted: #8b949e;
+            --accent: #58a6ff;
+            --accent-hover: #79b8ff;
+            --green: #3fb950;
+            --orange: #d29922;
+            --red: #f85149;
+            --purple: #bc8cff;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* Header */
+        header {
+            border-bottom: 1px solid var(--border);
+            padding: 40px 0 32px;
+        }
+
+        header h1 {
+            font-size: 2.2em;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        header h1 span { color: var(--accent); }
+
+        header .subtitle {
+            color: var(--text-muted);
+            font-size: 1.15em;
+            max-width: 700px;
+        }
+
+        .stats-bar {
+            display: flex;
+            gap: 32px;
+            margin-top: 24px;
+            flex-wrap: wrap;
+        }
+
+        .stat {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+        }
+
+        .stat-num {
+            font-size: 1.8em;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 0.9em;
+        }
+
+        /* Sections */
+        section {
+            padding: 40px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        section:last-child { border-bottom: none; }
+
+        section h2 {
+            font-size: 1.5em;
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        section h2 .badge {
+            font-size: 0.5em;
+            background: var(--accent);
+            color: var(--bg);
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            vertical-align: middle;
+        }
+
+        section > p {
+            color: var(--text-muted);
+            margin-bottom: 24px;
+            max-width: 800px;
+        }
+
+        /* Table */
+        .post-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+        }
+
+        .post-table th {
+            text-align: left;
+            padding: 10px 14px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            font-size: 0.8em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .post-table td {
+            padding: 12px 14px;
+            border: 1px solid var(--border);
+            vertical-align: top;
+            font-size: 0.92em;
+        }
+
+        .post-table tr:hover td {
+            background: var(--surface-hover);
+        }
+
+        .post-table a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        .post-table a:hover {
+            color: var(--accent-hover);
+            text-decoration: underline;
+        }
+
+        .forum-tag {
+            display: inline-block;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 0.82em;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        .status-none {
+            color: var(--red);
+            font-weight: 500;
+        }
+
+        .status-partial {
+            color: var(--orange);
+            font-weight: 500;
+        }
+
+        .status-yes {
+            color: var(--green);
+            font-weight: 500;
+        }
+
+        /* Insight box */
+        .insight {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--purple);
+            border-radius: 6px;
+            padding: 20px 24px;
+            margin: 32px 0;
+        }
+
+        .insight h3 {
+            color: var(--purple);
+            font-size: 0.85em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+        }
+
+        .insight p {
+            color: var(--text-muted);
+            margin-bottom: 10px;
+        }
+
+        .insight p:last-child { margin-bottom: 0; }
+
+        .insight strong { color: var(--text); }
+
+        /* The problem explained */
+        .problem-box {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 28px;
+            margin: 24px 0;
+        }
+
+        .problem-box h3 {
+            font-size: 1.1em;
+            margin-bottom: 16px;
+        }
+
+        .pipeline {
+            font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+            font-size: 0.85em;
+            color: var(--text-muted);
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 16px 20px;
+            overflow-x: auto;
+            white-space: pre;
+            line-height: 1.5;
+        }
+
+        .pipeline .highlight { color: var(--green); font-weight: 600; }
+        .pipeline .error { color: var(--red); font-weight: 600; }
+        .pipeline .dim { color: #484f58; }
+
+        /* Footer */
+        footer {
+            padding: 32px 0;
+            color: var(--text-muted);
+            font-size: 0.85em;
+            text-align: center;
+        }
+
+        footer a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        footer a:hover { text-decoration: underline; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            header h1 { font-size: 1.6em; }
+            .stats-bar { gap: 20px; }
+            .stat-num { font-size: 1.4em; }
+            .post-table { font-size: 0.85em; }
+            .post-table td, .post-table th { padding: 8px 10px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <header>
+        <h1>P2toMXF <span>- The Problem We Solve</span></h1>
+        <p class="subtitle">
+            A research compilation of forum posts where broadcast professionals, editors, and developers
+            describe the exact pain points that P2toMXF addresses. Collected April 2026.
+        </p>
+        <div class="stats-bar">
+            <div class="stat">
+                <span class="stat-num">35+</span>
+                <span class="stat-label">forum posts found</span>
+            </div>
+            <div class="stat">
+                <span class="stat-num">15+</span>
+                <span class="stat-label">different forums</span>
+            </div>
+            <div class="stat">
+                <span class="stat-num">2008&ndash;2025</span>
+                <span class="stat-label">span of the problem</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- THE CORE PROBLEM -->
+    <section>
+        <h2>The Core Problem</h2>
+        <p>
+            Panasonic P2 cards store video and audio as <strong>separate MXF files</strong> (OPAtom format).
+            Most tools, MAM systems, and broadcast servers expect <strong>single self-contained MXF or MOV files</strong> (OP1a).
+            FFmpeg's MXF muxer fails on P2 AVC-Intra due to a frame-size padding mismatch.
+        </p>
+
+        <div class="problem-box">
+            <h3>Why FFmpeg Alone Fails</h3>
+            <div class="pipeline"><span class="dim"># FFmpeg calculates:</span>  568,832 bytes/frame  <span class="dim">(from AVC-Intra spec)</span>
+<span class="dim"># P2 actual frames:</span>   568,320 bytes/frame  <span class="dim">(Panasonic's padding)</span>
+<span class="dim"># Difference:</span>          512 bytes
+
+<span class="error">[mxf @ 0x...] track 0: frame size does not match index unit size, 568320 != 568832</span></div>
+        </div>
+
+        <div class="problem-box">
+            <h3>The P2toMXF Solution</h3>
+            <div class="pipeline">P2 Card (OPAtom)        <span class="highlight">BMX</span>                       <span class="highlight">FFmpeg</span>
+VIDEO/*.MXF  ──┬──  bmxtranswrap   ─────▶  concat     ───▶  Final
+AUDIO/*.MXF  ──┘    -t op1a          OP1a   demuxer          MXF/MOV
+                    <span class="dim">(Panasonic-specific</span>       <span class="dim">(stream copy,</span>
+                    <span class="dim"> padding tables)</span>         <span class="dim"> fast)</span></div>
+        </div>
+    </section>
+
+    <!-- CATEGORY 1 -->
+    <section>
+        <h2>FFmpeg MXF Muxer Failures <span class="badge">6 posts</span></h2>
+        <p>
+            FFmpeg's MXF muxer uses generic frame-size calculations that don't account for
+            manufacturer-specific padding. These posts document the resulting failures.
+        </p>
+
+        <table class="post-table">
+            <thead>
+                <tr>
+                    <th>Post</th>
+                    <th>Forum</th>
+                    <th>Problem Described</th>
+                    <th>Solved?</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><a href="https://forum.blackmagicdesign.com/viewtopic.php?f=21&t=66042" target="_blank">Cannot import FFMPEG created AVC-I class 100 MXF</a></td>
+                    <td><span class="forum-tag">Blackmagic Forum</span></td>
+                    <td>FFmpeg-made AVC-Intra MXFs won't import into DaVinci Resolve (work in Premiere though). FFmpeg's MXF muxer called "rather generic and lacking many features."</td>
+                    <td class="status-none">No</td>
+                </tr>
+                <tr>
+                    <td><a href="https://forum.videohelp.com/threads/384582-FFMPEG-how-to-encode-this-Panasonic-P2-camera-MXF-video-file" target="_blank">FFMPEG, how to encode this Panasonic P2 camera MXF video file?</a></td>
+                    <td><span class="forum-tag">VideoHelp</span></td>
+                    <td>User gets <code>no corresponding source track found</code> error. Audio shows "data: none." Took <strong>a full year</strong> to find a workaround using <code>mxf2raw</code>.</td>
+                    <td class="status-partial">After 1 year</td>
+                </tr>
+                <tr>
+                    <td><a href="https://www.ffastrans.com/frm/forum/viewtopic.php?t=1299" target="_blank">FFmpeg to MXF Op-Atom</a></td>
+                    <td><span class="forum-tag">FFAStrans</span></td>
+                    <td>Confirmed: FFmpeg <strong>cannot stream-copy</strong> AVC-Intra to MXF OP1a container. Only encoding (slow) works. BMX is the required tool for lossless rewrap.</td>
+                    <td class="status-yes">BMX recommended</td>
+                </tr>
+                <tr>
+                    <td><a href="https://www.mail-archive.com/ffmpeg-trac@avcodec.org/msg68557.html" target="_blank">FFmpeg Trac #9647 &mdash; Non-Intra H.264 MXF muxing</a></td>
+                    <td><span class="forum-tag">FFmpeg Mailing List</span></td>
+                    <td>H.264 in MXF remains broken on FFmpeg master. Report still unresolved.</td>
+                    <td class="status-none">Open bug</td>
+                </tr>
+                <tr>
+                    <td><a href="https://trac.ffmpeg.org/ticket/7150" target="_blank">FFmpeg Trac #7150 &mdash; MXF audio length mismatch</a></td>
+                    <td><span class="forum-tag">FFmpeg Bug Tracker</span></td>
+                    <td>FFmpeg-created MXF files have uneven audio packets. Only video and first audio track have correct length.</td>
+                    <td class="status-none">Open bug</td>
+                </tr>
+                <tr>
+                    <td><a href="https://lists.ffmpeg.org/pipermail/ffmpeg-user/2019-August/045047.html" target="_blank">MXF, OP1A, DNxHD &mdash; Creates corrupted files</a></td>
+                    <td><span class="forum-tag">FFmpeg Mailing List</span></td>
+                    <td>Frame size changed errors when creating MXF files with FFmpeg's mxfenc muxer.</td>
+                    <td class="status-none">No</td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- CATEGORY 2 -->
+    <section>
+        <h2>P2 Separates Video &amp; Audio &mdash; How Do I Combine Them? <span class="badge">7 posts</span></h2>
+        <p>
+            The most common complaint across forums. People discover that P2 stores video and 4 audio channels
+            as separate MXF files and can't figure out how to get a single playable file.
+        </p>
+
+        <table class="post-table">
+            <thead>
+                <tr>
+                    <th>Post</th>
+                    <th>Forum</th>
+                    <th>Problem Described</th>
+                    <th>Solved?</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><a href="https://creativecow.net/forums/thread/convert-p2-structure-to-friendlier-single-file-for/" target="_blank">Convert P2 structure to friendlier single file format</a></td>
+                    <td><span class="forum-tag">Creative COW</span> <span class="forum-tag">2013</span></td>
+                    <td>User wants to convert P2 folder structure into single .mov files without re-encoding. Tried multiple tools. Only FCP7 "Log and Transfer" worked (but it re-encodes).</td>
+                    <td class="status-partial">Lossy only</td>
+                </tr>
+                <tr>
+                    <td><a href="https://creativecow.net/forums/thread/p2-footage-mxfs-not-including-audioae-2/" target="_blank">P2 footage &mdash; MXFs not including audio?</a></td>
+                    <td><span class="forum-tag">Creative COW</span> <span class="forum-tag">2015</span></td>
+                    <td>P2 footage from HVX 202AEN imports with <strong>no audio</strong> in Premiere Pro, Media Encoder, Prelude, and EditReady. Audio exists in AUDIO folder but nothing links it.</td>
+                    <td class="status-none">No solution</td>
+                </tr>
+                <tr>
+                    <td><a href="https://www.dvxuser.com/threads/mxf-files.193883/" target="_blank">MXF Files? &mdash; scattered audio and video</a></td>
+                    <td><span class="forum-tag">DVXuser</span></td>
+                    <td>"The video and audio files are separated and scattered (the audio files are often two files for left and right channels)."</td>
+                    <td class="status-partial">NLE workaround</td>
+                </tr>
+                <tr>
+                    <td><a href="https://forum.blackmagicdesign.com/viewtopic.php?f=21&t=40263" target="_blank">Importing P2 MXF files into DaVinci Resolve</a></td>
+                    <td><span class="forum-tag">Blackmagic Forum</span></td>
+                    <td>Resolve sees P2 as separate video and audio files, not unified clips. Can't properly import the card structure.</td>
+                    <td class="status-partial">Convert first</td>
+                </tr>
+                <tr>
+                    <td><a href="https://forum.lwks.com/threads/ingesting-panasonic-p2-mxf-files-from-hpx171.249517/" target="_blank">Ingesting Panasonic P2 MXF files from HPX171</a></td>
+                    <td><span class="forum-tag">Lightworks Forum</span></td>
+                    <td>Lightworks fails to properly join P2 MXFs &mdash; only some files join, audio doesn't match video. "Invalid codec" errors.</td>
+                    <td class="status-none">No</td>
+                </tr>
+                <tr>
+                    <td><a href="https://docs.kdenlive.org/en/tips_and_tricks/shooting_tips/using_p2_footage_from_panasonic_hvx200.html" target="_blank">Using P2 Footage from Panasonic HVX200</a></td>
+                    <td><span class="forum-tag">Kdenlive Docs</span></td>
+                    <td>"The MXF files on P2 cards <strong>cannot be read</strong> until you convert them with mxfsplit." Requires building mxflib from source and writing bash scripts.</td>
+                    <td class="status-partial">CLI workaround</td>
+                </tr>
+                <tr>
+                    <td><a href="https://discussions.apple.com/thread/1485332" target="_blank">Merging P2 File Structures?</a></td>
+                    <td><span class="forum-tag">Apple Community</span></td>
+                    <td>Users confused by P2 folder layout, asking how to merge the structure into usable files.</td>
+                    <td class="status-partial">FCP7 only</td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- CATEGORY 3 -->
+    <section>
+        <h2>OPAtom &rarr; OP1a &mdash; What Tool Do I Use? <span class="badge">5 posts</span></h2>
+        <p>
+            Technical users who understand the MXF format difference search for conversion tools.
+            bmxtranswrap is universally recommended &mdash; but it's a CLI tool buried in SourceForge.
+        </p>
+
+        <table class="post-table">
+            <thead>
+                <tr>
+                    <th>Post</th>
+                    <th>Forum</th>
+                    <th>Problem Described</th>
+                    <th>Solved?</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><a href="https://sourceforge.net/p/bmxlib/discussion/general/thread/8abffdb7/" target="_blank">Op Atom to Op1a?</a></td>
+                    <td><span class="forum-tag">BMXlib SourceForge</span> <span class="forum-tag">2012</span></td>
+                    <td>User discovers bmxtranswrap but can't find it in the downloads. Told to build from git.</td>
+                    <td class="status-yes">bmxtranswrap</td>
+                </tr>
+                <tr>
+                    <td><a href="http://www.freemxf.org/forum/viewtopic.php?f=2&t=164" target="_blank">OPAtom to OP1A conversion</a></td>
+                    <td><span class="forum-tag">freeMXF.org</span></td>
+                    <td>User needs OP1a for broadcast delivery. Finds the bmxtranswrap command with --start and --dur flags.</td>
+                    <td class="status-yes">bmxtranswrap</td>
+                </tr>
+                <tr>
+                    <td><a href="https://community.avid.com/forums/t/16356.aspx" target="_blank">MXF OP-atom to/from MXF OP-1a</a></td>
+                    <td><span class="forum-tag">Avid Community</span></td>
+                    <td>Conversion between MXF operational patterns for Avid workflows.</td>
+                    <td class="status-partial">Manual process</td>
+                </tr>
+                <tr>
+                    <td><a href="https://community.avid.com/forums/p/134021/763418.aspx" target="_blank">Rewrap MXF Op1a as OP-Atom?</a></td>
+                    <td><span class="forum-tag">Avid Community</span></td>
+                    <td>Reverse direction conversion &mdash; confirms the format incompatibility problem is universal.</td>
+                    <td class="status-partial">CLI tools</td>
+                </tr>
+                <tr>
+                    <td><a href="https://github.com/hdsdi3g/MyDMAM/issues/178" target="_blank">Use BBC BMX Tools for OP ATOM to OP1A</a></td>
+                    <td><span class="forum-tag">GitHub &mdash; MyDMAM</span></td>
+                    <td>An open-source MAM system added a feature request specifically to integrate BMX for P2 OPAtom-to-OP1a conversion.</td>
+                    <td class="status-yes">BMX integrated</td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- CATEGORY 4 -->
+    <section>
+        <h2>P2 MXF Won't Play / Won't Import / Not Recognized <span class="badge">7 posts</span></h2>
+        <p>
+            End users and editors who simply cannot open, import, or play their P2 camera files.
+            Every major NLE has documented P2 import failures.
+        </p>
+
+        <table class="post-table">
+            <thead>
+                <tr>
+                    <th>Post</th>
+                    <th>Forum</th>
+                    <th>Problem Described</th>
+                    <th>Solved?</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><a href="https://www.dvxuser.com/threads/how-to-play-panasonic-p2-avc-intra-50-mxf-files.216448/" target="_blank">How to play Panasonic P2 AVC-Intra 50 MXF files</a></td>
+                    <td><span class="forum-tag">DVXuser</span> <span class="forum-tag">2010</span></td>
+                    <td>VLC, Windows Media Player can't play P2 AVC-Intra files. Panasonic's own P2 Viewer only works with complete card structure intact.</td>
+                    <td class="status-partial">Panasonic tool only</td>
+                </tr>
+                <tr>
+                    <td><a href="https://community.adobe.com/questions-729/premiere-2020-won-t-import-mxf-files-1356342" target="_blank">Premiere 2020 Won't import MXF files</a></td>
+                    <td><span class="forum-tag">Adobe Community</span></td>
+                    <td>Premiere Pro 2020 broke P2 MXF import that worked fine in Premiere Pro 2019.</td>
+                    <td class="status-none">Regression</td>
+                </tr>
+                <tr>
+                    <td><a href="https://community.adobe.com/t5/premiere-pro-discussions/premiere-2022-p2-mxf-problems/td-p/12802558" target="_blank">Premiere 2022 P2 MXF Problems</a></td>
+                    <td><span class="forum-tag">Adobe Community</span></td>
+                    <td>Projects with P2 media cause spinning wheel on reopen, requiring force quit and media cache clearing.</td>
+                    <td class="status-none">Known issue</td>
+                </tr>
+                <tr>
+                    <td><a href="https://community.adobe.com/t5/premiere-pro-discussions/unsupported-or-damaged-mxf-file-cc-2020/m-p/10947184" target="_blank">Unsupported or damaged MXF File CC 2020</a></td>
+                    <td><span class="forum-tag">Adobe Community</span></td>
+                    <td>Valid P2 camera files reported as "unsupported or damaged" by Premiere Pro.</td>
+                    <td class="status-none">No</td>
+                </tr>
+                <tr>
+                    <td><a href="https://discussions.apple.com/thread/5538584" target="_blank">MXF Panasonic P2 import to FCP X</a></td>
+                    <td><span class="forum-tag">Apple Community</span></td>
+                    <td>P2 MXF import issues in Final Cut Pro X, audio problems.</td>
+                    <td class="status-partial">Workaround</td>
+                </tr>
+                <tr>
+                    <td><a href="https://discussions.apple.com/thread/1391448" target="_blank">P2 MXF Import failure: "Error: No Data"</a></td>
+                    <td><span class="forum-tag">Apple Community</span></td>
+                    <td>Complete import failure with "Error: No Data" message when trying to import P2 MXF.</td>
+                    <td class="status-none">No</td>
+                </tr>
+                <tr>
+                    <td><a href="https://forum.lwks.com/threads/problem-export-to-mxf-op-1a-avc-intra-100-special-format-requirement-from-broadcaster.27294/" target="_blank">Export to MXF AVC-Intra 100 &mdash; broadcaster requirement</a></td>
+                    <td><span class="forum-tag">Lightworks Forum</span></td>
+                    <td>Broadcaster <strong>requires</strong> OP-1a AVC-Intra 100 MXF delivery format. Lightworks can't produce it.</td>
+                    <td class="status-none">No</td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- CATEGORY 5 -->
+    <section>
+        <h2>MAM &amp; Broadcast Systems Reject P2 <span class="badge">5 posts</span></h2>
+        <p>
+            Professional broadcast infrastructure that advertises "P2 support" but fails
+            on specific format combinations, requiring conversion before ingest.
+        </p>
+
+        <table class="post-table">
+            <thead>
+                <tr>
+                    <th>Post</th>
+                    <th>Forum</th>
+                    <th>Problem Described</th>
+                    <th>Solved?</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><a href="https://www.ffastrans.com/frm/forum/viewtopic.php?t=243" target="_blank">Merge into one file &mdash; P2 monitor</a></td>
+                    <td><span class="forum-tag">FFAStrans</span></td>
+                    <td>Broadcast automation system needs P2 merged into single MXF. Added "MXF (BMX)" as a wrapper option &mdash; using BBC's BMX library internally.</td>
+                    <td class="status-yes">BMX integrated</td>
+                </tr>
+                <tr>
+                    <td><a href="https://www.digitalmediaworld.tv/broadcast/14-mxfspeedrail-automates-ingest-outgest-workflowsat-etv-panorama" target="_blank">mxfSPEEDRAIL automates ingest at ETV-Panorama</a></td>
+                    <td><span class="forum-tag">Digital Media World</span></td>
+                    <td>Professional broadcast facility uses dedicated hardware (mxfSPEEDRAIL) to automatically rewrap P2 into Avid MXF OPAtom for ingest.</td>
+                    <td class="status-yes">Expensive hardware</td>
+                </tr>
+                <tr>
+                    <td><a href="https://www.telestream.net/pdfs/app-notes/app_FF_P2.pdf" target="_blank">Processing P2 Media with FlipFactory</a></td>
+                    <td><span class="forum-tag">Telestream</span> <span class="forum-tag">2008</span></td>
+                    <td>Telestream FlipFactory supports P2 ingest but <strong>only DV25 and DV50</strong> &mdash; no AVC-Intra support. Leaves 50p AVC-Intra content unprocessable.</td>
+                    <td class="status-partial">No AVC-Intra</td>
+                </tr>
+                <tr>
+                    <td><a href="https://www.slashcam.de/info/P2-MXF-Metadaten-Problem-1000670.html" target="_blank">P2 MXF Metadaten Problem</a></td>
+                    <td><span class="forum-tag">slashcam.de</span> <span class="forum-tag">German</span></td>
+                    <td>UserClipName metadata from P2 Viewer Plus lost when importing into Resolve &mdash; metadata lives in XML, not MXF. Users writing Python scripts as workarounds.</td>
+                    <td class="status-partial">Custom scripts</td>
+                </tr>
+                <tr>
+                    <td><a href="https://github.com/hdsdi3g/MyDMAM/issues/178" target="_blank">MyDMAM &mdash; Use BBC BMX Tools for OP ATOM to OP1A</a></td>
+                    <td><span class="forum-tag">GitHub</span></td>
+                    <td>Open-source MAM system specifically requests BMX integration for P2 ingest. Confirms OPAtom-to-OP1a is a standard broadcast requirement.</td>
+                    <td class="status-yes">Feature request</td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- CATEGORY 6: RECENT -->
+    <section>
+        <h2>Recent Posts (2023&ndash;2025) <span class="badge">8 posts</span></h2>
+        <p>
+            The P2 MXF problem isn't a legacy issue &mdash; it's still actively breaking workflows
+            in the latest versions of professional software, including on Apple Silicon Macs.
+        </p>
+
+        <table class="post-table">
+            <thead>
+                <tr>
+                    <th>Post</th>
+                    <th>Forum</th>
+                    <th>Problem Described</th>
+                    <th>Solved?</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><a href="https://community.adobe.com/t5/premiere-pro-bugs/mxf-file-read-error-after-updating-to-premiere-pro-2023/idi-p/13308878" target="_blank">MXF File read error after updating to Premiere Pro 2023</a></td>
+                    <td><span class="forum-tag">Adobe Community</span> <span class="forum-tag">2023</span></td>
+                    <td>After updating to Premiere Pro 2023, MXF files display squished with <strong>half the frame green</strong>. Files played fine before the update. Required beta patch 23.6.38 to fix.</td>
+                    <td class="status-partial">Fixed in beta</td>
+                </tr>
+                <tr>
+                    <td><a href="https://community.adobe.com/t5/premiere-pro-discussions/premiere-pro-23-2-crashes-when-importing-loading-mxf-files-case-nvidia-and-windows-11-solution/td-p/13595844" target="_blank">Premiere Pro 23.2 crashes when importing MXF files</a></td>
+                    <td><span class="forum-tag">Adobe Community</span> <span class="forum-tag">2023</span></td>
+                    <td>Premiere Pro 23.2 crashes outright when importing or loading MXF files. Workaround: switch renderer to "Software Only."</td>
+                    <td class="status-partial">Workaround</td>
+                </tr>
+                <tr>
+                    <td><a href="https://community.adobe.com/questions-729/problems-with-audio-channels-of-mxf-op1a-file-in-premiere-pro-2023-1395420" target="_blank">Audio channel problems with MXF OP1a in Premiere Pro 2023</a></td>
+                    <td><span class="forum-tag">Adobe Community</span> <span class="forum-tag">2023</span></td>
+                    <td>Audio channels from MXF OP1a files handled incorrectly in Premiere Pro 2023 &mdash; channel mapping broken.</td>
+                    <td class="status-none">No</td>
+                </tr>
+                <tr>
+                    <td><a href="https://community.adobe.com/bug-reports-528/after-effects-2025-cannot-import-prores-mxf-op1a-files-1215636" target="_blank">After Effects 2025 cannot import ProRes MXF OP1a files</a></td>
+                    <td><span class="forum-tag">Adobe Community</span> <span class="forum-tag">2025</span></td>
+                    <td>After Effects 2025 reports MXF OP1a files as "unsupported format" with error code 86::1. Same files work in Premiere.</td>
+                    <td class="status-none">Open bug</td>
+                </tr>
+                <tr>
+                    <td><a href="https://isaact.micro.blog/2024/09/17/in-praise-of.html" target="_blank">In Praise of OP1a MXFs for Editorial Use in Avid</a></td>
+                    <td><span class="forum-tag">Blog</span> <span class="forum-tag">Sep 2024</span></td>
+                    <td>Editor documents OP-Atom pain: cryptic filenames like <code>V01.DF338FB9_1F15</code>, each file = one stream (can't see AND hear), files designed for machines not humans. Praises OP1a as the fix.</td>
+                    <td class="status-yes">OP1a advocacy</td>
+                </tr>
+                <tr>
+                    <td><a href="https://discussions.apple.com/thread/255956838" target="_blank">Canon C80 XF-AVC Intra files cause issues on Mac</a></td>
+                    <td><span class="forum-tag">Apple Community</span> <span class="forum-tag">2024</span></td>
+                    <td>Bug in Apple's AVC-Intra codec bundle causes failures with All-Intra MXF on Intel Macs. Doesn't reproduce on Apple Silicon &mdash; inconsistent codec support.</td>
+                    <td class="status-partial">Silicon only</td>
+                </tr>
+                <tr>
+                    <td><a href="https://forum.marquisbroadcast.com/x2pro-problem-reports/2206-problem-with-sonoma-mac-os.html" target="_blank">x2pro MXF export broken on macOS Sonoma</a></td>
+                    <td><span class="forum-tag">Marquis Forum</span> <span class="forum-tag">2024</span></td>
+                    <td>x2pro audio converter cannot export from MXF files on Mac Studio running macOS Sonoma. Accessibility permission issues.</td>
+                    <td class="status-partial">OS-level issue</td>
+                </tr>
+                <tr>
+                    <td><a href="https://community.adobe.com/questions-729/problem-importing-mxf-files-into-p-pro-from-panasonic-p2-card-1358143" target="_blank">Problem importing MXF files into Premiere from P2 card</a></td>
+                    <td><span class="forum-tag">Adobe Community</span> <span class="forum-tag">2023</span></td>
+                    <td>Adobe Media Encoder crashes when using ingest-copy setting to import P2 card files. Must copy card manually first, then import with Ingest off.</td>
+                    <td class="status-partial">Manual workaround</td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- CATEGORY 7: macOS SPECIFIC -->
+    <section>
+        <h2>macOS-Specific Issues <span class="badge">7 posts</span></h2>
+        <p>
+            Problems unique to macOS users: Apple Silicon compatibility, QuickTime limitations,
+            Panasonic driver gaps, and the lack of native MXF tooling on the platform.
+        </p>
+
+        <table class="post-table">
+            <thead>
+                <tr>
+                    <th>Post</th>
+                    <th>Forum</th>
+                    <th>Problem Described</th>
+                    <th>Solved?</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><a href="https://discussions.apple.com/thread/255123226" target="_blank">Panasonic P2 Card Reader won't show up on Mac</a></td>
+                    <td><span class="forum-tag">Apple Community</span> <span class="forum-tag">2024</span></td>
+                    <td>Panasonic AU-XPD3 P2 card reader <strong>not recognized</strong> on MacBook Pro M1 Pro. Drivers installed but cards don't mount. Worked fine on Intel Macs.</td>
+                    <td class="status-none">No fix</td>
+                </tr>
+                <tr>
+                    <td><a href="https://discussions.apple.com/thread/250434524" target="_blank">Panasonic AJ-PCD20 P2 card reader not working on Mac</a></td>
+                    <td><span class="forum-tag">Apple Community</span> <span class="forum-tag">2023</span></td>
+                    <td>Legacy Panasonic P2 card reader incompatible with recent macOS. No updated drivers available.</td>
+                    <td class="status-none">No driver</td>
+                </tr>
+                <tr>
+                    <td><a href="https://mac.eltima.com/how-to-play-mxf.html" target="_blank">How to Open MXF Files on Mac in 2025</a></td>
+                    <td><span class="forum-tag">Eltima (Guide)</span> <span class="forum-tag">2025</span></td>
+                    <td>QuickTime <strong>cannot play MXF files</strong> natively. MXF described as "bulky format with a lot of overhead, poorly suited for personal use." Reports performance issues on M1 MacBook Pro.</td>
+                    <td class="status-partial">Third-party player</td>
+                </tr>
+                <tr>
+                    <td><a href="https://apps.apple.com/us/app/mxf-wrapper/id702843749" target="_blank">MXF Wrapper on Mac App Store</a></td>
+                    <td><span class="forum-tag">Mac App Store</span></td>
+                    <td>Existing macOS tool for P2 MXF rewrap to MOV. Supports P2 separate audio merge. However: no AVC-Intra MXF output (MOV only), no batch queue, no concatenation of multiple clips.</td>
+                    <td class="status-partial">MOV output only</td>
+                </tr>
+                <tr>
+                    <td><a href="https://docs.hedge.video/editready/converting-media/rewrapping" target="_blank">EditReady by Hedge &mdash; MXF Rewrapping</a></td>
+                    <td><span class="forum-tag">Hedge Docs</span> <span class="forum-tag">2024</span></td>
+                    <td>Professional Mac rewrapping tool. Supports MXF and MOV. But: <strong>P2 AVC-Intra not explicitly listed</strong> as supported input. No mention of OPAtom-to-OP1a conversion.</td>
+                    <td class="status-partial">Limited P2</td>
+                </tr>
+                <tr>
+                    <td><a href="https://docs.kdenlive.org/en/tips_and_tricks/shooting_tips/using_p2_footage_from_panasonic_hvx200.html" target="_blank">Using P2 footage on Linux/Mac with Kdenlive</a></td>
+                    <td><span class="forum-tag">Kdenlive Docs</span></td>
+                    <td>"MXF files on P2 cards <strong>cannot be read</strong>" without conversion. Requires building mxflib from source, writing bash scripts, running mxfsplit manually. No GUI solution offered.</td>
+                    <td class="status-partial">Build from source</td>
+                </tr>
+                <tr>
+                    <td><a href="https://eww.pass.panasonic.co.jp/pro-av/support/content/download/EN/ep2main/macp2driver_e.htm" target="_blank">Panasonic P2 Driver for Mac</a></td>
+                    <td><span class="forum-tag">Panasonic</span> <span class="forum-tag">Official</span></td>
+                    <td>Official P2 driver claims Monterey/Ventura/Sonoma + Apple Silicon support. But users report mixed results &mdash; card readers still fail on some M-series Macs.</td>
+                    <td class="status-partial">Unreliable</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="insight">
+            <h3>The macOS Gap</h3>
+            <p>
+                On macOS, the P2 MXF tooling landscape is thin. <strong>MXF Wrapper</strong> only outputs MOV (no MXF OP1a).
+                <strong>EditReady</strong> doesn't explicitly support P2 AVC-Intra. <strong>Panasonic P2CMS</strong> doesn't rewrap or merge.
+                <strong>bmxtranswrap</strong> requires Homebrew, cmake, and building from source. QuickTime can't even play MXF.
+            </p>
+            <p>
+                P2toMXF is the only native macOS app that bundles BMX + FFmpeg, handles the full OPAtom-to-OP1a pipeline,
+                supports both MXF and MOV output, and provides batch queue, verification, and multi-card loading &mdash;
+                all without requiring a terminal.
+            </p>
+        </div>
+    </section>
+
+    <!-- INSIGHTS -->
+    <section>
+        <h2>Key Findings</h2>
+
+        <div class="insight">
+            <h3>BMX Is Invisible to Most Users</h3>
+            <p>
+                <strong>bmxtranswrap is the correct solution</strong>, universally recommended by MXF experts. But it lives
+                on SourceForge, requires building from source, and has no GUI. People on Creative COW, Apple Community,
+                Blackmagic Forum, DVXuser, and Adobe Community struggle with P2 MXF for years &mdash; but almost
+                never discover it.
+            </p>
+            <p>
+                P2toMXF bridges this gap: a native macOS app wrapping the exact CLI pipeline that broadcast engineers use,
+                made accessible to editors who would never open a terminal.
+            </p>
+        </div>
+
+        <div class="insight">
+            <h3>"MXF" Is Not One Format</h3>
+            <p>
+                Multiple posts reveal people being told <strong>"we support MXF"</strong> and then finding their P2 MXF rejected.
+                Sony XDCAM MXF, Panasonic P2 MXF, and Avid MXF are effectively different formats sharing a file extension.
+                The MXF "standard" has dozens of operational patterns, codec profiles, and metadata schemes &mdash;
+                and tools that handle one variant often fail on another.
+            </p>
+        </div>
+
+        <div class="insight">
+            <h3>The Problem Persists Across Decades</h3>
+            <p>
+                Posts range from <strong>2008 to 2025</strong>. Every major NLE has documented P2 import failures.
+                Adobe has broken and re-broken P2 support across Premiere versions. The FFmpeg MXF muxer bugs
+                remain open. This is not a problem that's going away.
+            </p>
+        </div>
+
+        <div class="insight">
+            <h3>Professional Broadcast Uses Dedicated Rewrapping</h3>
+            <p>
+                mxfSPEEDRAIL, Telestream Vantage, FFAStrans, and MyDMAM all have P2-to-OP1a conversion
+                built into their ingest pipelines. Raw P2 cards are <strong>not directly usable</strong> in most broadcast
+                workflows. P2toMXF provides the same capability as a standalone desktop tool.
+            </p>
+        </div>
+    </section>
+
+    <!-- FORUMS COVERED -->
+    <section>
+        <h2>Forums &amp; Sources Searched</h2>
+        <p style="columns: 2; column-gap: 32px; max-width: 100%;">
+            Blackmagic Design Forum<br>
+            Creative COW (Panasonic Cameras)<br>
+            VideoHelp Forum<br>
+            DVXuser<br>
+            Adobe Community (Premiere, AE)<br>
+            Apple Community / Discussions<br>
+            Avid Community<br>
+            Lightworks (LWKS) Forum<br>
+            FFAStrans Forum<br>
+            BMXlib SourceForge Forum<br>
+            freeMXF.org Forum<br>
+            slashcam.de (German)<br>
+            FFmpeg Mailing List &amp; Trac<br>
+            Kdenlive Documentation<br>
+            GitHub (MyDMAM, FFmpeg)<br>
+            Gearspace (Post Production)<br>
+            Telestream Technical Notes<br>
+            Digital Media World<br>
+            Marquis Broadcast Forum<br>
+            Hedge / EditReady Docs<br>
+            Mac App Store (MXF Wrapper)<br>
+            Eltima / Elmedia Guides<br>
+            Panasonic Support (P2 Drivers)<br>
+        </p>
+    </section>
+
+</div>
+
+<footer>
+    <div class="container">
+        Research compiled April 2026 for the
+        <a href="https://github.com/Xpycode/P2toMXF">P2toMXF</a> project.
+        <br>
+        Built with BMX (BBC MXF Toolkit) + FFmpeg. Native macOS app.
+    </div>
+</footer>
+
+</body>
+</html>

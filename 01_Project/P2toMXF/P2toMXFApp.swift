@@ -2,6 +2,8 @@ import SwiftUI
 
 @main
 struct P2toMXFApp: App {
+    @StateObject private var updaterController = UpdaterController()
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -9,7 +11,7 @@ struct P2toMXFApp: App {
         }
         .defaultSize(width: 1200, height: 900)
         .commands {
-            FileMenuCommands()
+            FileMenuCommands(updaterController: updaterController)
         }
     }
 }
@@ -18,9 +20,17 @@ struct P2toMXFApp: App {
 /// changes from `TempDirectoryManager` actually propagate into the menu — a direct
 /// `.commands { CommandGroup(...) }` closure does not observe ObservableObjects reliably.
 struct FileMenuCommands: Commands {
+    @ObservedObject var updaterController: UpdaterController
     @ObservedObject private var tempManager = TempDirectoryManager.shared
 
     var body: some Commands {
+        CommandGroup(after: .appInfo) {
+            Button("Check for Updates\u{2026}") {
+                updaterController.checkForUpdates()
+            }
+            .disabled(!updaterController.canCheckForUpdates)
+        }
+
         CommandGroup(after: .newItem) {
             Text("Current Temp: \(currentTempLabel)")
             Divider()

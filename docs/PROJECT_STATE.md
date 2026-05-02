@@ -3,12 +3,12 @@
 ## Quick Facts
 - **Project:** P2toMXF
 - **Started:** 2026-01-01
-- **Current Phase:** done
-- **Version:** 1.2 (build 1200)
-- **Last Session:** 2026-04-14
+- **Current Phase:** v1.3 planning
+- **Version:** 1.2 (build 1200) — v1.3 in progress
+- **Last Session:** 2026-04-15
 
 ## Current Focus
-UX and reliability round complete — elapsed-timer bug fixed (TimelineView + root-cause `startedAt` clobbering), three-layer disk-space safeguards shipped (DiskSpace/TempDirectoryManager/preflight), FCP Theme adopted with forced dark mode matching Penumbra/CropBatch shell standard. Ready to ship pending app minimums audit (Sparkle, logging).
+v1.3 "Polish & Distribution" scope confirmed: Sparkle auto-update, diagnostic logging, Theme migration for remaining chrome, FCPToolbarButtonStyle adoption, README / landing page from forum research. All reinforce App Shell Standard compliance and make the app distribution-ready.
 
 ## What It Does
 macOS utility that converts Panasonic P2 card footage:
@@ -61,13 +61,18 @@ None.
 3. [x] File splitting — all files under 500 lines (2026-04-13)
 4. [x] Disk-space safeguards + configurable temp folder (2026-04-14)
 5. [x] FCP Theme + forced dark mode migration (2026-04-14)
-6. [ ] App minimums: Sparkle auto-update, diagnostic logging
-7. [ ] UI audit: empty/loading/error states
-8. [ ] Evaluate moving FFmpeg to download script (59MB in repo)
-9. [ ] P2 clip preview via proxy MP4s (under consideration)
-10. [ ] Use forum research for README / landing page copy
-11. [ ] Migrate remaining `Color.gray` / `.secondary` chrome references to `Theme.*`
-12. [ ] Consider adopting `FCPToolbarButtonStyle` to complete App Shell Standard match
+
+### v1.3 "Polish & Distribution" — in progress
+6. [ ] Sparkle auto-update integration (appcast, EdDSA signing, INFOPLIST_KEY gotcha)
+7. [ ] Diagnostic logging (os.Logger subsystems + log export for bug reports)
+8. [ ] Migrate remaining `Color.gray` / `.secondary` chrome → `Theme.*`
+9. [ ] Adopt `FCPToolbarButtonStyle` for full App Shell Standard match
+10. [ ] README / landing page copy from forum research
+
+### Deferred to v1.4+
+11. [ ] UI audit: empty/loading/error states
+12. [ ] Evaluate moving FFmpeg to download script (59MB in repo)
+13. [ ] P2 clip preview via proxy MP4s (Panasonic P2 Viewer broken on modern macOS)
 
 ---
 *Updated automatically by Claude during sessions*
